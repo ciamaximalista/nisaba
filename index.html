@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nisaba - Lector de Feeds Inteligente</title>
+    <link rel="icon" href="nisaba.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Poppins:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --font-headline: 'Poppins', sans-serif;
+            --font-body: 'Lato', sans-serif;
+            --text-color: #333;
+            --bg-color: #f9f9f9;
+            --border-color: #e0e0e0;
+            --accent-color: #007bff;
+            --card-bg: #ffffff;
+        }
+        body {
+            font-family: var(--font-body);
+            color: var(--text-color);
+            background-color: var(--bg-color);
+            margin: 0;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 2em;
+        }
+        header {
+            text-align: center;
+            padding: 3em 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        header img {
+            max-width: 150px;
+            margin-bottom: 1em;
+        }
+        header h1 {
+            font-family: var(--font-headline);
+            font-size: 3em;
+            margin: 0;
+        }
+        header p {
+            font-size: 1.2em;
+            color: #666;
+        }
+        .cta-button {
+            display: inline-block;
+            background-color: var(--accent-color);
+            color: white;
+            padding: 0.8em 1.5em;
+            border-radius: 5px;
+            text-decoration: none;
+            font-family: var(--font-headline);
+            font-size: 1.1em;
+            margin-top: 1.5em;
+            transition: background-color 0.3s ease;
+        }
+        .cta-button:hover {
+            background-color: #0056b3;
+        }
+        .features {
+            padding: 3em 0;
+        }
+        .features h2 {
+            text-align: center;
+            font-family: var(--font-headline);
+            font-size: 2.5em;
+            margin-bottom: 1.5em;
+        }
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2em;
+        }
+        .feature-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5em;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .feature-card h3 {
+            font-family: var(--font-headline);
+            margin-top: 0;
+            color: var(--accent-color);
+        }
+        footer {
+            text-align: center;
+            padding: 2em;
+            margin-top: 2em;
+            border-top: 1px solid var(--border-color);
+        }
+        .license-box {
+            display: inline-block;
+            border: 1px solid var(--border-color);
+            padding: 1.5em;
+            border-radius: 8px;
+            background-color: var(--card-bg);
+        }
+        .license-box p {
+            margin: 0.5em 0;
+            font-size: 0.9em;
+            color: #555;
+        }
+        .license-box img {
+            vertical-align: middle;
+            height: 1.5em;
+            margin-left: 0.5em;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <img src="nisaba.png" alt="Logo de Nisaba">
+        <h1>Nisaba</h1>
+        <p>Un lector de feeds RSS inteligente, personal y auto-alojado.</p>
+        <a href="nisaba.php" class="cta-button">Acceder a la Aplicación</a>
+    </header>
+
+    <main class="container">
+        <section class="features">
+            <h2>Funcionalidades</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>Agregador Inteligente</h3>
+                    <p>Compatible con RSS y Atom. Organiza tus feeds en carpetas y gestiona tus suscripciones importando y exportando archivos OPML.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Análisis con IA</h3>
+                    <p>Integra la API de Google Gemini para generar resúmenes y análisis estratégicos de tus artículos no leídos, ayudándote a identificar las señales más importantes.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Traducción Automática</h3>
+                    <p>Utiliza la API de Google Translate para traducir al español los artículos de feeds internacionales, rompiendo las barreras del idioma.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Notas Personales</h3>
+                    <p>Añade tus propias reflexiones a los artículos y resúmenes. Todas tus notas se guardan y se publican en un feed RSS personal para que puedas suscribirte a tus propias ideas.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Caché Configurable</h3>
+                    <p>Decide si los artículos leídos se ocultan al instante o si permanecen visibles durante 24 o 48 horas, dándote control total sobre tu flujo de lectura.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Interfaz Limpia</h3>
+                    <p>Una interfaz de usuario sencilla y adaptable, diseñada para centrarse en lo más importante: la lectura y el análisis de la información.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="license-box">
+            <p>
+                Nisaba es software libre bajo licencia EUPL v1.2
+            </p>
+            <p>
+                Creado por Compañía Maximalista S.Coop.
+                <a href="https://maximalista.com" target="_blank">
+                    <img src="maximalista.png" alt="Logo Maximalista">
+                </a>
+            </p>
+        </div>
+    </footer>
+
+</body>
+</html>
