@@ -1,8 +1,19 @@
-![Nisaba](nisaba.png)
+![Nisaba](nisaba-banner.png)
 
-# Nisaba Feed Reader
+# Lector de Feeds Pedagógico
 
-Nisaba es un lector de feeds RSS/Atom personal y auto-alojado, diseñado para ofrecer una experiencia de lectura limpia y potente. Además de las funcionalidades estándar de un agregador de noticias, Nisaba integra herramientas avanzadas de IA para el análisis de información -buscando *señales débiles* de cambios disruptivos futuros- y la traducción de contenidos.
+Con la ayuda de IA de última generación, Nisaba te ayudará a **leer las noticias de una manera diferente**, dándote primero el marco  apasionante del gran juego estratégico que da sentido al  escenario gepolítico, económico, tecnológico y cultural relacionándolo con las innovaciones y cambios disruptivos que podrían convertisre en nuevas tendencias y cambios globales en breve.
+
+Elige tus fuentes y agrega los medios de todo el mundo que más confianza te den. No te preocupes por la lengua,, la IA los traducirá por ti. 
+
+Y recuerda: todo lo que la IA te presentará en sus informes está en las noticias con que la alimentas, sólo te muestra lo que el ruido no deja ver. Verás que la realidad global es mucho más apasionante que las *fake news* y las *conspiranoias*.
+
+## ¿Cómo usar Nisaba para descubrir sus posibilidades?
+
+1. Tras configurar la app, sube  feeds (fuentes RSS o Atom) de periodicos y revistas de todo el mundo, no te preocupes por el idioma y ponlas en una misma carpeta, llámala por ejemplo «Noticias».
+2. Actualiza las feeds pulsando el botón de arriba a la izquierda. Si has puesto muchas puede tardar un rato en bajarlas todas.
+3. Pulsa el botón «Análisis. Te aparecerá un informe de análisis como los que utilizan los principales *think tanks* del mundo. Cada uno tiene un botón en la esquina superior derecha para que lo copies y lo guardes como quieras.
+4. Pulsa el botón «Traducir Nuevos» y lee tranquilamente en español las noticias que más te interesen carpeta a carpeta o fuente a fuente. Puedes usar como guía el informe que preparó Gemini para ti y que leíste antes. En cada noticia podrás tomar notas que puedes compartir mediante RSS con otras personas, incorporar a tu blog o web personal o usar para programar envíos a redes sociales.
 
 ## Funcionalidades Principales
 
@@ -17,47 +28,94 @@ Nisaba es un lector de feeds RSS/Atom personal y auto-alojado, diseñado para of
 - **Feed de Notas**: Todas tus notas están disponibles a través de un feed RSS propio (`notas.xml`), permitiéndote suscribirte a tus propias ideas.
 - **Interfaz Sencilla**: Una interfaz de usuario limpia y adaptable, centrada en la legibilidad.
 
-## Instalación
+## Instalación y Configuración
 
-### Requisitos
+Sigue estos pasos para instalar y configurar Nisaba en tu propio servidor.
 
-- Un servidor web con soporte para PHP (ej. Apache, Nginx).
-- La extensión cURL de PHP habilitada (necesaria para la función de traducción).
-- Permisos de escritura para el servidor web en el directorio `data/` y sus subdirectorios.
+### 1. Requisitos Previos
 
-### Pasos de Instalación
+Antes de empezar, asegúrate de que tu servidor cumple con los siguientes requisitos:
 
-1.  **Descargar/Clonar**: Descarga los archivos de Nisaba o clona el repositorio en un directorio accesible por tu servidor web.
-2.  **Establecer Permisos**: Asegúrate de que los directorios `data/` y `data/favicons/` existen y de que el usuario del servidor web (normalmente `www-data`) tiene permisos de escritura sobre ellos. Puedes hacerlo con el siguiente comando desde el directorio raíz de Nisaba:
-    ```sh
-    chmod -R 775 data
-    ```
-3.  **Primer Acceso**: Abre `nisaba.php` en tu navegador web (ej. `http://tuservidor.com/nisaba/nisaba.php`).
-4.  **Crear Administrador**: La primera vez que accedas, Nisaba te pedirá que crees la cuenta de administrador. Introduce un nombre de usuario y una contraseña.
-5.  **Iniciar Sesión**: Una vez creada la cuenta, inicia sesión con tus credenciales.
+- **Servidor Web**: Un servidor web como Apache o Nginx con soporte para PHP 8.0 o superior.
+- **Extensiones de PHP**:
+    - `curl`: Necesaria para la traducción automática y para comunicarse con la API de Gemini.
+    - `dom`: Para procesar los feeds RSS/Atom.
+    - `simplexml`: El motor principal para leer y escribir los archivos de datos.
+    - `mbstring`: Para el manejo correcto de caracteres multibyte.
+- **Permisos de Escritura**: El servidor web debe tener permisos para escribir en el directorio `data/` de Nisaba.
 
-## Configuración y Uso
+### 2. Instalación
 
-Tras iniciar sesión, se recomienda configurar las integraciones con las APIs de Google para habilitar las funcionalidades avanzadas.
+1.  **Descarga Nisaba**:
+    - **Opción A (Git)**: Clona el repositorio en tu servidor. Ve al directorio donde quieres instalar Nisaba y ejecuta:
+      ```sh
+      git clone https://github.com/ciamaximalista/nisaba.git
+      ```
+    - **Opción B (ZIP)**: Descarga el archivo ZIP desde el [repositorio de GitHub](https://github.com/ciamaximalista/nisaba) y descomprímelo en el directorio de tu servidor web.
 
-1.  **Navega a "Configuración y Preferencias"** en la barra lateral.
+2.  **Configura los Permisos**:
+    - Nisaba guarda todos sus datos (usuarios, feeds, caché) en el directorio `data/`. Es crucial que el servidor web tenga permiso para escribir en él.
+    - Desde el directorio raíz de Nisaba, ejecuta el siguiente comando. Puede que necesites usar `sudo` dependiendo de la configuración de tu servidor:
+      ```sh
+      # Otorga permisos al grupo del servidor web (www-data es común en Debian/Ubuntu)
+      chown -R :www-data data
+      # Otorga permisos de escritura al grupo
+      chmod -R 775 data
+      ```
+    - Si no estás seguro de cuál es el usuario de tu servidor web, puedes probar con `chmod -R 777 data`, aunque es una opción menos segura.
 
-2.  **API Key de Google Gemini**: Para usar la función de "Análisis", necesitas una API Key de Google Gemini. Puedes obtener una de forma gratuita en [Google AI Studio](https://aistudio.google.com/app/apikey).
+3.  **Primer Acceso y Creación de Usuario**:
+    - Abre tu navegador y ve a la URL donde has instalado Nisaba (por ejemplo, `http://tu-dominio.com/nisaba/nisaba.php`).
+    - La primera vez que accedas, se te presentará un formulario para crear la cuenta de administrador. Este será el único usuario de la aplicación.
+    - Introduce un nombre de usuario y una contraseña segura y haz clic en "Registrar".
 
-3.  **API Key de Google Translate**: Para usar la función de "Traducir Nuevos", necesitas una API Key de la API de Google Cloud Translation. Puedes obtenerla creando un proyecto en la [Consola de Google Cloud](https://console.cloud.google.com/).
+### 3. Configuración de las APIs de Google
 
-4.  **Otros Ajustes**:
-    - **Modelo de Gemini**: Selecciona el modelo de IA que prefieras para los análisis.
-    - **Prompt para Gemini**: Puedes personalizar el prompt que se envía a la IA para adaptar los resúmenes a tus necesidades.
-    - **Borrar artículos leídos de la caché**: Configura cuándo deben desaparecer los artículos leídos (inmediatamente, a las 24h o a las 48h).
-    - **Artículos leídos**: Decide si los artículos leídos permanecen visibles (en gris) hasta que se purgan de la caché o si se ocultan en cuanto los marcas como leídos.
+Para desbloquear las funcionalidades de traducción e inteligencia artificial, necesitas configurar las APIs de Google.
+
+1.  **Inicia Sesión** en tu instancia de Nisaba.
+2.  En el menú de la izquierda, haz clic en **"Configuración y Preferencias"**.
+
+#### a) API Key de Google Gemini (para Análisis con IA)
+
+Esta API te permite usar la función "Análisis" para obtener resúmenes estratégicos de tus noticias.
+
+1.  **Obtén tu API Key**:
+    - Ve a [Google AI Studio](https://aistudio.google.com/app/apikey).
+    - Inicia sesión con tu cuenta de Google.
+    - Haz clic en "Create API key in new project".
+    - Copia la clave que se genera.
+2.  **Guárdala en Nisaba**:
+    - En la página de configuración de Nisaba, pega la clave en el campo "API Key de Google Gemini".
+    - Selecciona el modelo de Gemini que prefieras (por ejemplo, `gemini-1.5-pro-latest`).
+    - Opcionalmente, puedes personalizar el *prompt* que se usa para generar los análisis para adaptarlo a tus intereses.
+
+#### b) API Key de Google Translate (para Traducción)
+
+Esta API te permite traducir artículos de otros idiomas al español.
+
+1.  **Obtén tu API Key**:
+    - Ve a la [Consola de Google Cloud](https://console.cloud.google.com/).
+    - Crea un nuevo proyecto o selecciona uno existente.
+    - En el menú de navegación, ve a "APIs y servicios" > "Biblioteca".
+    - Busca "Cloud Translation API" y actívala para tu proyecto.
+    - Ve a "APIs y servicios" > "Credenciales".
+    - Haz clic en "Crear credenciales" > "Clave de API".
+    - Copia la clave que se genera.
+2.  **Guárdala en Nisaba**:
+    - En la página de configuración de Nisaba, pega la clave en el campo "API Key de Google Translate".
+
+3.  **Guarda la Configuración**:
+    - Haz clic en el botón "Guardar Configuración" al final de la página.
+
+¡Y ya está! Nisaba está listo para que empieces a añadir tus fuentes y a explorar las noticias con una nueva perspectiva.
 
 ### Uso Diario
 
 - **Gestionar Fuentes**: Añade nuevas fuentes RSS o importa un archivo OPML desde la sección "Gestionar Fuentes". Aquí también puedes editar el nombre, la carpeta y el idioma de cada feed.
 - **Actualizar Feeds**: Haz clic en "Actualizar Feeds" para descargar los últimos artículos de todas tus suscripciones.
 - **Traducir y Analizar**: Usa los botones "Traducir Nuevos" y "Análisis" para procesar los artículos descargados.
-- **Purgar Caché**: Si tienes configurada una duración de caché de 24h o 48h, el botón "Purgar artículos antiguos ahora" en la página de configuración eliminará manualmente los artículos que ya hayan expirado.
+- **Purgar Caché**: Si tienes configurada una duración de caché de 24h o 48h, el botón "Purgar artículos antiguos ahora" en la página de configuración eliminará manualmente los artículos que ya hayan expirado y que estarán apareciéndote de color gris.
 
 ## Licencia
 

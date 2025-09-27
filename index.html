@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nisaba - Lector de Feeds Inteligente</title>
+    <meta property="og:title" content="Nisaba" />
+    <meta property="og:description" content="Lector de feeds pedagógico" />
+    <meta property="og:image" content="nisaba-banner.png" />
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Nisaba">
+    <meta name="twitter:description" content="Lector de feeds pedagógico">
+    <meta name="twitter:image" content="nisaba-banner.png">
     <link rel="icon" href="nisaba.png" type="image/png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -36,12 +43,27 @@
             border-bottom: 1px solid var(--border-color);
         }
         header img {
-            max-width: 150px;
+            max-width: 300px;
             margin-bottom: 1em;
         }
         header h1 {
             font-family: var(--font-headline);
             font-size: 3em;
+            margin: 0;
+        }
+        .teaser-box {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5em;
+            margin: 2em auto;
+            max-width: 720px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+        }
+        .teaser-box p {
+            font-size: 1.1em;
+            color: #555;
+            text-align: left;
             margin: 0;
         }
         header p {
@@ -120,9 +142,11 @@
 
     <header>
         <img src="nisaba.png" alt="Logo de Nisaba">
-        <h1>Nisaba</h1>
-        <p>Un lector de feeds RSS inteligente, personal y auto-alojado.<br />
-        Desarrollado dentro del proyecto <a href="https://ruralnext.org">RuralNEXT</a></p>
+                <div class="teaser-box">
+            <h1>Lector de feeds pedagógico</h1>
+            <p>Con la ayuda de IA de última geneneración Nisaba te ayudará a <strong>leer las noticias de una manera diferente</strong>, dándote primero el marco apasionante del gran juego estratégico que da sentido al escenario geopolítico, económico, tecnológico y cultural relacionándolo con las innovaciones y cambios disruptivos que podrían convertisre en nuevas tendencias y cambios globales en breve.<br /><br />Elige tus fuentes y agrega los medios de todo el mundo que más confianza te den, no te preocupes por el idioma: la IA los traducirá por ti.<br /><br />Y recuerda: todo lo que la IA te presentará en sus informes está en las noticias con que la alimentas, sólo te muestra lo que el ruido no deja ver. Verás que la realidad global es mucho más apasionante que las <em>fake news</em> y las <em>conspiranoias</em>.</p>
+        </div>
+        <p>Desarrollado dentro del proyecto <a href="https://ruralnext.org">RuralNEXT</a></p>
         <a href="nisaba.php" class="cta-button">Acceder a la Aplicación</a>
     </header>
 

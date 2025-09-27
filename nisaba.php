@@ -1018,8 +1018,8 @@ if (isset($_SESSION['username'])) {
                 <div class="logo"><img src="nisaba.png" alt="Logo Nisaba"></div>
                 <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 1.5em;">
                     <a href="?update_cache=1" class="btn">Actualizar Feeds</a>
-                    <a href="?action=translate" class="btn">Traducir Nuevos</a>
                     <a href="?view=nisaba_summary" class="btn">Análisis</a>
+                    <a href="?action=translate" class="btn">Traducir Nuevos</a>
                 </div>
                 <nav>
                     <ul>
