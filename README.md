@@ -1,3 +1,5 @@
+![Nisaba](nisaba.png)
+
 # Nisaba Feed Reader
 
 Nisaba es un lector de feeds RSS/Atom personal y auto-alojado, diseñado para ofrecer una experiencia de lectura limpia y potente. Además de las funcionalidades estándar de un agregador de noticias, Nisaba integra herramientas avanzadas de IA para el análisis y la traducción de contenidos.
@@ -10,7 +12,7 @@ Nisaba es un lector de feeds RSS/Atom personal y auto-alojado, diseñado para of
 - **Gestión de Artículos**: Marca artículos como leídos de forma individual o masiva.
 - **Caché Configurable**: Elige si los artículos leídos se ocultan inmediatamente o si permanecen visibles (en gris) durante 24 o 48 horas antes de ser eliminados de la caché.
 - **Traducción Automática**: Integra la API de Google Translate para traducir al español los artículos de feeds en otros idiomas.
-- **Análisis con IA**: Utiliza la API de Google Gemini para generar resúmenes y análisis estratégicos de tus artículos no leídos, agrupados por carpeta.
+- **Análisis con IA**: Utiliza la API de Google Gemini para generar análisis estratégicos y encontrar elementos  disruptivos y cambios de tendencias en tus artículos no leídos, agrupados por carpeta.
 - **Notas Personales**: Toma notas sobre cualquier artículo o resumen. Tus notas se guardan y son accesibles en cualquier momento.
 - **Feed de Notas**: Todas tus notas están disponibles a través de un feed RSS propio (`notas.xml`), permitiéndote suscribirte a tus propias ideas.
 - **Interfaz Sencilla**: Una interfaz de usuario limpia y adaptable, centrada en la legibilidad.
@@ -59,8 +61,8 @@ Tras iniciar sesión, se recomienda configurar las integraciones con las APIs de
 
 ## Licencia
 
-Nisaba es software libre distribuido bajo la licencia **EUPL v1.2**.
+Nisaba es software libre distribuido bajo la licencia **[EUPL v1.2](https://interoperable-europe.ec.europa.eu/collection/eupl/eupl-text-eupl-12)**.
 
 ## Autoría
 
-Nisaba ha sido creado y es mantenido por **Compañía Maximalista S.Coop.**
+Nisaba ha sido creado y es mantenido por **[Compañía Maximalista S.Coop.](https://maximalista.coop)**

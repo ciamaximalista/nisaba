@@ -1317,7 +1317,7 @@ if (isset($_SESSION['username'])) {
                             $cache_xml = simplexml_load_file($cacheFile);
                             if($cache_xml) {
                                 $articles = $cache_xml->xpath('//item');
-                                if (empty($articles)) { echo "<li>No hay artículos. Prueba a actualizar.</li>"; } 
+                                if (empty($articles)) { echo "<li>No hay artículos por leer. Prueba a actualizar las feeds.</li>"; } 
                                 else { 
                                     $sorted_articles = [];
                                     foreach ($articles as $item) {
@@ -1343,7 +1343,7 @@ if (isset($_SESSION['username'])) {
                                         echo '</li>';
                                     }
                                 }
-                            } else { echo "<li>Error al leer la caché.</li>"; }
+                            } else { echo "<li>No hay artículos por leer. Prueba a actualizar las feeds.</li>"; }
                         } else { echo "<li>No se ha generado la cache.</li>"; }
                         ?>
                     </ul>
@@ -1440,7 +1440,7 @@ if (isset($_SESSION['username'])) {
                             $cache_xml = simplexml_load_file($cacheFile);
                             if($cache_xml){
                                 $articles = $cache_xml->xpath('//item[feed_url="' . $selected_feed_url . '"]');
-                                if (empty($articles)) { echo "<li>No hay artículos. Prueba a actualizar.</li>"; } 
+                                if (empty($articles)) { echo "<li>No hay artículos por leer. Actualiza las feeds.</li>"; } 
                                 else { foreach ($articles as $item) {
                                     $is_read = (string)$item->read === '1';
                                     if ($is_read && $show_read_articles === 'false') continue;
@@ -1456,7 +1456,7 @@ if (isset($_SESSION['username'])) {
                                     }
                                     echo '</li>';
                                 }}
-                            } else { echo "<li>Error al leer la caché.</li>"; }
+                            } else { echo "<li>No hay artículos por leer. Actualiza las feeds.</li>"; }
                         } else { echo "<li>No se ha generado la cache.</li>"; }
                         ?>
                     </ul>
