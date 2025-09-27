@@ -2,7 +2,7 @@
 
 # Nisaba Feed Reader
 
-Nisaba es un lector de feeds RSS/Atom personal y auto-alojado, diseñado para ofrecer una experiencia de lectura limpia y potente. Además de las funcionalidades estándar de un agregador de noticias, Nisaba integra herramientas avanzadas de IA para el análisis y la traducción de contenidos.
+Nisaba es un lector de feeds RSS/Atom personal y auto-alojado, diseñado para ofrecer una experiencia de lectura limpia y potente. Además de las funcionalidades estándar de un agregador de noticias, Nisaba integra herramientas avanzadas de IA para el análisis de información -buscando *señales débiles* de cambios disruptivos futuros- y la traducción de contenidos.
 
 ## Funcionalidades Principales
 
