@@ -2,7 +2,7 @@
 
 # Lector de Feeds Pedagógico
 
-Con la ayuda de IA de última generación, Nisaba te ayudará a **leer las noticias de una manera diferente**, al modo de un analista profesional. Nisaba te dará en un párrafo el marco apasionante del gran juego estratégico que da sentido al escenario geopolítico, económico, tecnológico y cultural. Luego lo reslacionará con las innovaciones y cambios disruptivos que podrían convertirre en nuevas tendencias y cambios globales en breve. Y finalmente te lo justificará señalándote los artículos en los que se basa y por qué.
+Con la ayuda de IA de última generación, Nisaba te ayudará a **leer las noticias de una manera diferente**, al modo de un analista profesional. Nisaba te dará en un párrafo el marco apasionante del gran juego estratégico que da sentido al escenario geopolítico, económico, tecnológico y cultural. Luego lo relacionará con las innovaciones y cambios disruptivos que podrían convertirse en nuevas tendencias y cambios globales en breve. Y finalmente te lo justificará señalándote los artículos en los que se basa y por qué.
 
 Elige tus fuentes y agrega los medios de todo el mundo que más confianza te den. No te preocupes por la lengua,, la IA los traducirá por ti. 
 
@@ -12,7 +12,7 @@ Y recuerda: todo lo que la IA te presentará en sus informes está en las notici
 
 1. Tras configurar la app, sube  feeds (fuentes RSS o Atom) de periodicos y revistas de todo el mundo, no te preocupes por el idioma y ponlas en una misma carpeta, llámala por ejemplo «Noticias».
 2. Actualiza las feeds pulsando el botón de arriba a la izquierda. Si has puesto muchas puede tardar un rato en bajarlas todas.
-3. Pulsa el botón «Análisis. Te aparecerá un informe de análisis como los que utilizan los principales *think tanks* del mundo. Cada uno tiene un botón en la esquina superior derecha para que lo copies y lo guardes como quieras.
+3. Pulsa el botón «Análisis. Te aparecerá, por cada carpeta de fuentes que hayas añadido, un informe de análisis como los que elaboran los principales *think tanks* del mundo. Cada uno tiene un botón en la esquina superior derecha para que lo copies y lo guardes como quieras.
 4. Pulsa el botón «Traducir Nuevos» y lee tranquilamente en español las noticias que más te interesen carpeta a carpeta o fuente a fuente. Puedes usar como guía el informe que preparó Gemini para ti y que leíste antes. En cada noticia podrás tomar notas que puedes compartir mediante RSS con otras personas, incorporar a tu blog o web personal o usar para programar envíos a redes sociales.
 
 ## Funcionalidades Principales
