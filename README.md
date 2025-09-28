@@ -2,11 +2,11 @@
 
 # Lector de Feeds Pedagógico
 
-Con la ayuda de IA de última generación, Nisaba te ayudará a **leer las noticias de una manera diferente**, dándote primero el marco  apasionante del gran juego estratégico que da sentido al  escenario gepolítico, económico, tecnológico y cultural relacionándolo con las innovaciones y cambios disruptivos que podrían convertisre en nuevas tendencias y cambios globales en breve.
+Con la ayuda de IA de última generación, Nisaba te ayudará a **leer las noticias de una manera diferente**, al modo de un analista profesional. Nisaba te dará en un párrafo el marco apasionante del gran juego estratégico que da sentido al escenario geopolítico, económico, tecnológico y cultural. Luego lo reslacionará con las innovaciones y cambios disruptivos que podrían convertirre en nuevas tendencias y cambios globales en breve. Y finalmente te lo justificará señalándote los artículos en los que se basa y por qué.
 
 Elige tus fuentes y agrega los medios de todo el mundo que más confianza te den. No te preocupes por la lengua,, la IA los traducirá por ti. 
 
-Y recuerda: todo lo que la IA te presentará en sus informes está en las noticias con que la alimentas, sólo te muestra lo que el ruido no deja ver. Verás que la realidad global es mucho más apasionante que las *fake news* y las *conspiranoias*.
+Y recuerda: todo lo que la IA te presentará en sus informes está en las noticias con que la alimentas, sólo te muestra lo que el ruido no deja escuchar ni entender. Verás que la realidad global es mucho más apasionante que las banderías, las *fake news* y las *conspiranoias*.
 
 ## ¿Cómo usar Nisaba para descubrir sus posibilidades?
 
