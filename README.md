@@ -25,7 +25,8 @@ Y recuerda: todo lo que la IA te presentará en sus informes está en las notici
 - **Traducción Automática**: Integra la API de Google Translate para traducir al español los artículos de feeds en otros idiomas.
 - **Análisis con IA**: Utiliza la API de Google Gemini para generar análisis estratégicos y encontrar elementos  disruptivos y cambios de tendencias en tus artículos no leídos, agrupados por carpeta.
 - **Notas Personales**: Toma notas sobre cualquier artículo o resumen. Tus notas se guardan y son accesibles en cualquier momento.
-- **Feed de Notas**: Todas tus notas están disponibles a través de un feed RSS propio (`notas.xml`), permitiéndote suscribirte a tus propias ideas.
+- **Recibir Notas**: Puedes suscribirte a las notas de otros usuarios para leer y analizar en equipo.
+- **Feed de Notas**: Todas tus notas están disponibles a través de un feed RSS propio (`notas.xml`), permitiéndote que otros se suscriban a tus ideas y comentarios.
 - **Interfaz Sencilla**: Una interfaz de usuario limpia y adaptable, centrada en la legibilidad.
 
 ## Instalación y Configuración
@@ -115,7 +116,7 @@ Esta API te permite traducir artículos de otros idiomas al español.
 - **Gestionar Fuentes**: Añade nuevas fuentes RSS o importa un archivo OPML desde la sección "Gestionar Fuentes". Aquí también puedes editar el nombre, la carpeta y el idioma de cada feed.
 - **Actualizar Feeds**: Haz clic en "Actualizar Feeds" para descargar los últimos artículos de todas tus suscripciones.
 - **Traducir y Analizar**: Usa los botones "Traducir Nuevos" y "Análisis" para procesar los artículos descargados.
-- **Purgar Caché**: Si tienes configurada una duración de caché de 24h o 48h, el botón "Purgar artículos antiguos ahora" en la página de configuración eliminará manualmente los artículos que ya hayan expirado y que estarán apareciéndote de color gris.
+
 
 ## Licencia
 
