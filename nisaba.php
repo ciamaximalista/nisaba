@@ -93,13 +93,110 @@ function get_gemini_models($api_key) {
     return $generative_models;
 }
 
+function nisaba_get_base_url() {
+    if (!isset($_SERVER['HTTP_HOST'])) {
+        return '';
+    }
+    $is_https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https');
+    $scheme = $is_https ? 'https://' : 'http://';
+    $host = $_SERVER['HTTP_HOST'];
+    $script_name = $_SERVER['SCRIPT_NAME'] ?? '';
+    $script_dir = rtrim(str_replace('\\', '/', dirname($script_name)), '/');
+    if ($script_dir === '.' || $script_dir === '/') {
+        $script_dir = '';
+    }
+    return rtrim($scheme . $host . $script_dir, '/');
+}
+
+function nisaba_public_url(string $path): string {
+    if ($path === '') return '';
+    if (preg_match('#^https?://#i', $path)) {
+        return $path;
+    }
+    $base = nisaba_get_base_url();
+    if ($base === '') {
+        return $path;
+    }
+    return rtrim($base, '/') . '/' . ltrim($path, '/');
+}
+
+function nisaba_resolve_url(string $base_url, string $relative_path): string {
+    if ($relative_path === '' || preg_match('#^https?://#i', $relative_path)) {
+        return $relative_path;
+    }
+    if (strpos($relative_path, '//') === 0) {
+        $scheme = parse_url($base_url, PHP_URL_SCHEME) ?: 'https';
+        return $scheme . ':' . $relative_path;
+    }
+    $parts = parse_url($base_url);
+    if (!$parts || !isset($parts['scheme'], $parts['host'])) {
+        return $relative_path;
+    }
+    $scheme = $parts['scheme'];
+    $host = $parts['host'];
+    $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+    $base_path = $parts['path'] ?? '';
+
+    if (isset($relative_path[0]) && $relative_path[0] === '/') {
+        $path = $relative_path;
+    } else {
+        $base_directory = $base_path;
+        if ($base_directory === '' || substr($base_directory, -1) !== '/') {
+            $base_directory = substr($base_directory, 0, strrpos($base_directory, '/') !== false ? strrpos($base_directory, '/') + 1 : 0);
+        }
+        $path = rtrim($base_directory, '/') . '/' . $relative_path;
+    }
+
+    $segments = [];
+    foreach (explode('/', $path) as $segment) {
+        if ($segment === '' || $segment === '.') {
+            continue;
+        }
+        if ($segment === '..') {
+            array_pop($segments);
+        } else {
+            $segments[] = $segment;
+        }
+    }
+    $normalized_path = '/' . implode('/', $segments);
+    return $scheme . '://' . $host . $port . $normalized_path;
+}
+
 function generate_notes_rss($xml_data, $username) {
     $rss = new SimpleXMLElement('<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"></rss>');
     $channel = $rss->addChild('channel');
-    $channel->addChild('title', 'Notas de Nisaba para ' . $username);
-    $channel->addChild('link', 'https://ruralnext.org/nisaba/notas.xml');
+
+    $display_name = '';
+    if (isset($xml_data->settings->display_name)) {
+        $display_name = trim((string)$xml_data->settings->display_name);
+    }
+
+    $channel_title = $display_name !== '' ? 'Notas de ' . $display_name : 'Notas de Nisaba para ' . $username;
+    $channel->addChild('title', $channel_title);
+
+    $feed_link = nisaba_public_url('notas.xml');
+    if ($feed_link === '') {
+        $feed_link = 'notas.xml';
+    }
+    $channel->addChild('link', $feed_link);
     $channel->addChild('description', 'Un feed de las notas personales guardadas en Nisaba.');
     $channel->addChild('language', 'es-es');
+    $channel->addChild('generator', 'Nisaba');
+    $channel->addChild('owner_username', $username);
+    if ($display_name !== '') {
+        $channel->addChild('owner_name', $display_name);
+        $channel->addChild('managingEditor', $display_name);
+    }
+
+    $user_favicon_path = isset($xml_data->settings->user_favicon) ? trim((string)$xml_data->settings->user_favicon) : '';
+    $user_favicon_url = $user_favicon_path !== '' ? nisaba_public_url($user_favicon_path) : '';
+    if ($user_favicon_url !== '') {
+        $image = $channel->addChild('image');
+        $image->addChild('url', $user_favicon_url);
+        $image->addChild('title', $channel_title);
+        $image->addChild('link', $feed_link);
+        $channel->addChild('owner_favicon', $user_favicon_url);
+    }
 
     if (isset($xml_data->notes)) {
         $notes_nodes = $xml_data->xpath('//note');
@@ -324,6 +421,7 @@ if (isset($_SESSION['username'])) {
     $gemini_prompt = load_prompt_template();
     $cache_duration = sanitize_cache_duration(isset($xml_data->settings->cache_duration) ? (string)$xml_data->settings->cache_duration : (string)DEFAULT_CACHE_DURATION_HOURS);
     $show_read_articles = isset($xml_data->settings->show_read_articles) ? (string)$xml_data->settings->show_read_articles : 'true';
+    $archive_integration_enabled = isset($xml_data->settings->archive_integration) && (string)$xml_data->settings->archive_integration === 'true';
 
 
     // --- 3.2. MANEJO DE ACCIONES (GET y POST) ---
@@ -858,6 +956,7 @@ if (isset($_SESSION['username'])) {
             if (isset($_POST['show_read_articles'])) {
                 $xml_data->settings->show_read_articles = $_POST['show_read_articles'];
             }
+            $xml_data->settings->archive_integration = isset($_POST['archive_integration']) ? 'true' : 'false';
 
             if ($xml_data->asXML($userFile)) {
                 $_SESSION['settings_feedback'] = 'Configuración guardada correctamente.';
@@ -1170,11 +1269,18 @@ if (isset($_SESSION['username'])) {
         .sidebar-utility-link { font-weight: 600; color: var(--accent-color); }
         .sidebar-utility-link::before { content: '\203A\00A0'; }
         .sidebar-utility-link:hover { text-decoration: underline; }
-        .notes-stack { position: relative; width: 215px; min-height: 520px; flex: 0 0 auto; }
+        .notes-stack-wrapper { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; }
+        .notes-stack { position: relative; width: 215px; min-height: 320px; flex: 0 0 auto; }
+        .notes-stack-own { min-height: 320px; }
+        .notes-stack-received { margin-top: 3rem; min-height: 320px; }
         .notes-postit-main { display: block; position: relative; z-index: 9; background: #fff3a8; color: #433; padding: 1em 1.2em; border-radius: 6px 6px 14px 6px; box-shadow: 0 6px 12px rgba(0,0,0,0.18), inset 0 -6px 12px rgba(255,255,255,0.4); transform: rotate(-2deg); font-family: 'Shadows Into Light', cursive; font-size: 1.3em; transition: transform 0.2s ease, box-shadow 0.2s ease; text-align: center; }
+        .notes-postit-main.received { background: #ffe38f; }
         .notes-postit-main::after { content: ''; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 70px; height: 18px; background: rgba(0,0,0,0.08); border-radius: 3px; pointer-events: none; z-index: -1; }
         .notes-postit-main:hover { text-decoration: none; transform: rotate(0deg) scale(1.02); box-shadow: 0 12px 22px rgba(0,0,0,0.24), inset 0 -6px 12px rgba(255,255,255,0.5); }
         .notes-mini { position: absolute; display: block; width: 190px; padding: 0.9em 1.15em; border-radius: 6px 6px 12px 6px; color: #3a2f2f; font-family: 'Shadows Into Light', cursive; box-shadow: 0 7px 14px rgba(0,0,0,0.2); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .notes-mini-received { padding-top: 1.6em; }
+        .notes-mini-favicon { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 50%; overflow: hidden; background: rgba(255,255,255,0.9); box-shadow: 0 2px 5px rgba(0,0,0,0.25); padding: 3px; }
+        .notes-mini-favicon img { width: 100%; height: 100%; object-fit: contain; display: block; border-radius: 50%; }
         .notes-mini strong { display: block; font-size: 1.12em; margin-bottom: 0.4em; }
         .notes-mini span { display: block; font-size: 1em; line-height: 1.35; }
         .notes-mini:hover { text-decoration: none; transform: scale(1.03); box-shadow: 0 10px 18px rgba(0,0,0,0.24); }
@@ -1182,7 +1288,9 @@ if (isset($_SESSION['username'])) {
         @media (max-width: 991.98px) {
             .sidebar-folder-content { gap: 1rem; flex-direction: column; }
             .sidebar-folder-list { padding-right: 0; }
+            .notes-stack-wrapper { width: 100%; }
             .notes-stack { width: 100%; min-height: 260px; }
+            .notes-stack-received { margin-top: 1.8rem; }
             .notes-stack .notes-mini { position: relative; width: 100%; left: 0; top: 0; transform: rotate(0deg); margin-bottom: 0.75rem; box-shadow: 0 4px 10px rgba(0,0,0,0.18); }
             .notes-stack .notes-postit-main { transform: rotate(0deg); }
         }
@@ -1250,6 +1358,9 @@ if (isset($_SESSION['username'])) {
             font-family: var(--font-body);
             border-radius: 4px;
         }
+        .note-display p {
+	    font-family: 'Shadows Into Light', cursive;
+	    }
         .copy-btn {
             position: absolute;
             top: 10px;
@@ -1352,24 +1463,27 @@ if (isset($xml_data->received_notes_cache)) {
 }
 $received_notes_count = count($received_notes_all);
 $received_notes_sidebar = array_slice($received_notes_all, 0, 2);
-$sidebar_notes_entries = [];
+$sidebar_own_entries = [];
 foreach ($own_notes_sidebar as $note_item) {
     $title = normalize_feed_text($note_item->article_title ?? '');
     if ($title === '') $title = 'Nota sin título';
     $excerpt = normalize_feed_text($note_item->content ?? '');
     $excerpt = $excerpt !== '' ? truncate_text($excerpt, 12) : 'Sin contenido';
-    $sidebar_notes_entries[] = [
+    $sidebar_own_entries[] = [
         'type' => 'own',
         'title' => $title,
         'excerpt' => $excerpt,
         'link' => '?view=notes'
     ];
 }
-$sidebar_notes_entries[] = [
+
+$sidebar_received_entries = [];
+$sidebar_received_entries[] = [
     'type' => 'count',
     'title' => $received_notes_count . ' Notas Recibidas',
     'excerpt' => $received_notes_count ? 'Haz clic para verlas todas' : 'Todavía no recibes notas',
-    'link' => '?view=received_notes'
+    'link' => '?view=received_notes',
+    'favicon' => ''
 ];
 foreach ($received_notes_sidebar as $note_item) {
     $title = normalize_feed_text($note_item->title ?? '');
@@ -1380,22 +1494,43 @@ foreach ($received_notes_sidebar as $note_item) {
     if ($source_name !== '') {
         $excerpt = ($excerpt !== '' ? $excerpt . ' · ' : '') . 'Por ' . $source_name;
     }
-    $sidebar_notes_entries[] = [
+    $favicon_path = '';
+    if (isset($note_item->favicon) && trim((string)$note_item->favicon) !== '') {
+        $favicon_path = trim((string)$note_item->favicon);
+    }
+    $sidebar_received_entries[] = [
         'type' => 'received',
         'title' => $title,
         'excerpt' => $excerpt,
-        'link' => '?view=received_notes'
+        'link' => '?view=received_notes',
+        'favicon' => $favicon_path
     ];
 }
+
 $note_colors = ['#ffd6a5', '#c9f2ff', '#baffc9', '#ffadad', '#f9f871', '#d0a9f5', '#ffcfdf', '#c4fcef'];
 $note_offsets = [-32, 30, -22, 38, -14, 34, -40, 26];
 $note_rotations = ['-4deg', '3deg', '-6deg', '4deg', '-2deg', '5deg', '-3deg', '2deg'];
 $note_base_top = 92;
 $note_step = 40;
-$notes_stack_classes = 'notes-stack mt-4 mt-lg-0';
-if (empty($sidebar_notes_entries)) {
-    $notes_stack_classes .= ' no-mini';
+$compute_stack_height = function ($count) use ($note_base_top, $note_step) {
+    $count = max(0, (int)$count);
+    if ($count === 0) {
+        return $note_base_top + 160;
+    }
+    return $note_base_top + (($count - 1) * $note_step) + 180;
+};
+$own_entries_count = count($sidebar_own_entries);
+$received_entries_count = count($sidebar_received_entries);
+$notes_stack_own_classes = 'notes-stack notes-stack-own mt-4 mt-lg-0';
+if ($own_entries_count === 0) {
+    $notes_stack_own_classes .= ' no-mini';
 }
+$notes_stack_received_classes = 'notes-stack notes-stack-received';
+if ($received_entries_count === 0) {
+    $notes_stack_received_classes .= ' no-mini';
+}
+$notes_stack_own_style = 'height:' . $compute_stack_height($own_entries_count) . 'px;';
+$notes_stack_received_style = 'height:' . $compute_stack_height($received_entries_count) . 'px;';
 
 $sidebar_unread_by_feed = [];
 if (file_exists($cacheFile)) {
@@ -1481,12 +1616,13 @@ $current_feed = $_GET['feed'] ?? '';
                                     <a href="?view=settings" class="sidebar-utility-link">Configuración</a>
                                 </div>
                             </div>
-                            <div class="<?php echo $notes_stack_classes; ?>">
-                                <a href="?view=notes" class="notes-postit-main">Notas</a>
-<?php foreach ($sidebar_notes_entries as $idx => $entry):
-    $color = $entry['type'] === 'count' ? '#ffe38f' : $note_colors[$idx % count($note_colors)];
-    $left = $entry['type'] === 'count' ? 12 : $note_offsets[$idx % count($note_offsets)];
-    $rotate = $entry['type'] === 'count' ? '2deg' : $note_rotations[$idx % count($note_rotations)];
+                            <div class="notes-stack-wrapper">
+                                <div class="<?php echo $notes_stack_own_classes; ?>" style="<?php echo htmlspecialchars($notes_stack_own_style, ENT_QUOTES); ?>">
+                                    <a href="?view=notes" class="notes-postit-main">Notas</a>
+<?php foreach ($sidebar_own_entries as $idx => $entry):
+    $color = $note_colors[$idx % count($note_colors)];
+    $left = $note_offsets[$idx % count($note_offsets)];
+    $rotate = $note_rotations[$idx % count($note_rotations)];
     $top = $note_base_top + ($idx * $note_step);
     $zIndex = 20 - $idx;
     $style = sprintf('background:%s; top:%dpx; left:%dpx; transform: rotate(%s); z-index:%d;', $color, $top, $left, $rotate, $zIndex);
@@ -1496,6 +1632,32 @@ $current_feed = $_GET['feed'] ?? '';
                                     <?php if (!empty($entry['excerpt'])): ?><span><?php echo htmlspecialchars($entry['excerpt']); ?></span><?php endif; ?>
                                 </a>
 <?php endforeach; ?>
+                                </div>
+<?php if (!empty($sidebar_received_entries)): ?>
+                                <div class="<?php echo $notes_stack_received_classes; ?>" style="<?php echo htmlspecialchars($notes_stack_received_style, ENT_QUOTES); ?>">
+                                    <a href="?view=received_notes" class="notes-postit-main received">Recibidas</a>
+<?php foreach ($sidebar_received_entries as $idx => $entry):
+    $color = $entry['type'] === 'count' ? '#ffe38f' : $note_colors[$idx % count($note_colors)];
+    $left = $entry['type'] === 'count' ? 12 : $note_offsets[$idx % count($note_offsets)];
+    $rotate = $entry['type'] === 'count' ? '2deg' : $note_rotations[$idx % count($note_rotations)];
+    $top = $note_base_top + ($idx * $note_step);
+    $zIndex = 20 - $idx;
+    $style = sprintf('background:%s; top:%dpx; left:%dpx; transform: rotate(%s); z-index:%d;', $color, $top, $left, $rotate, $zIndex);
+    $note_classes = 'notes-mini';
+    if ($entry['type'] === 'received') {
+        $note_classes .= ' notes-mini-received';
+    }
+?>
+                                <a href="<?php echo htmlspecialchars($entry['link']); ?>" class="<?php echo $note_classes; ?>" style="<?php echo htmlspecialchars($style, ENT_QUOTES); ?>">
+<?php if ($entry['type'] === 'received' && !empty($entry['favicon'])): ?>
+                                    <span class="notes-mini-favicon"><img src="<?php echo htmlspecialchars($entry['favicon']); ?>" alt=""></span>
+<?php endif; ?>
+                                    <strong><?php echo htmlspecialchars($entry['title']); ?></strong>
+                                    <?php if (!empty($entry['excerpt'])): ?><span><?php echo htmlspecialchars($entry['excerpt']); ?></span><?php endif; ?>
+                                </a>
+<?php endforeach; ?>
+                                </div>
+<?php endif; ?>
                             </div>
                         </div>
                     </aside>
@@ -1660,6 +1822,8 @@ $current_feed = $_GET['feed'] ?? '';
                             $article_title = !empty($article->title_translated) ? $article->title_translated : $article->title_original;
                             $article_content = !empty($article->content_translated) ? $article->content_translated : $article->content_original;
                             $article_image = (string)$article->image;
+                            $article_link = (string)$article->link;
+                            $archive_today_url = ($archive_integration_enabled && $article_link !== '') ? 'https://archive.today/?run=1&url=' . rawurlencode($article_link) : '';
                         ?>
                         <h2><?php echo htmlspecialchars($article_title); ?> <img src="<?php echo htmlspecialchars($favicon_url); ?>" alt="" style="width: 32px; height: 32px; vertical-align: middle; margin-left: 10px; border-radius: 4px;"></h2>
                         <?php if (!empty($article_image)): ?>
@@ -1682,7 +1846,12 @@ $current_feed = $_GET['feed'] ?? '';
                             ?>
                         </div>
                         <hr>
-                        <a href="<?php echo htmlspecialchars($article->link); ?>" target="_blank" class="btn btn-outline-secondary">Ver original</a>
+                        <div class="article-actions" style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
+                            <a href="<?php echo htmlspecialchars($article_link); ?>" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary">Ver original</a>
+<?php if ($archive_today_url !== ''): ?>
+                            <a href="<?php echo htmlspecialchars($archive_today_url); ?>" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary">Versión en Archive.today</a>
+<?php endif; ?>
+                        </div>
                         <hr>
                         <h3>Notas</h3>
                         <form method="POST" action="nisaba.php" class="note-form">
@@ -2079,6 +2248,13 @@ $current_feed = $_GET['feed'] ?? '';
                                     }
                                 ?>
                             </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="archive_integration" style="display: flex; align-items: center; gap: 0.5em;">
+                                <input type="checkbox" id="archive_integration" name="archive_integration" value="1" <?php echo $archive_integration_enabled ? 'checked' : ''; ?>>
+                                Integración con Archive.today
+                            </label>
+                            <p style="font-size: 0.8em; color: #555;">Muestra un enlace directo a la copia almacenada en Archive.today cuando abras un artículo.</p>
                         </div>
                         <button type="submit" name="save_settings" class="btn btn-primary">Guardar Configuración</button>
                     </form>
