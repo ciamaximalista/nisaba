@@ -199,7 +199,7 @@ function generate_notes_rss($xml_data, $username) {
     }
 
     if (isset($xml_data->notes)) {
-        $notes_nodes = $xml_data->xpath('//note');
+        $notes_nodes = $xml_data->notes->note;
         $notes_array = [];
         foreach ($notes_nodes as $note) {
             $notes_array[] = $note;
@@ -941,6 +941,28 @@ if (isset($_SESSION['username'])) {
             if (!isset($xml_data->settings)) {
                 $xml_data->addChild('settings');
             }
+
+            if (isset($_POST['display_name'])) {
+                $xml_data->settings->display_name = trim($_POST['display_name']);
+            }
+
+            if (isset($_FILES['user_favicon']) && $_FILES['user_favicon']['error'] === UPLOAD_ERR_OK) {
+                $file = $_FILES['user_favicon'];
+                $allowed_types = ['image/png', 'image/jpeg', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/svg+xml', 'image/webp'];
+                if (in_array($file['type'], $allowed_types) && $file['size'] < 1048576) { // 1MB limit
+                    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+                    if (empty($extension)) $extension = 'png';
+                    $filename = 'userfav_' . hash('md5', $username) . '.' . $extension;
+                    $save_path = FAVICON_DIR . '/' . $filename;
+                    if (move_uploaded_file($file['tmp_name'], $save_path)) {
+                        $xml_data->settings->user_favicon = 'data/favicons/' . $filename;
+                    }
+                } else {
+                    $_SESSION['settings_feedback'] = 'ERROR: El favicon no es válido. Comprueba el tipo (PNG, JPG, etc.) y el tamaño (máx 1MB).';
+                    header('Location: nisaba.php?view=settings');
+                    exit;
+                }
+            }
             if (isset($_POST['gemini_api_key']) && !empty($_POST['gemini_api_key'])) {
                 $xml_data->settings->gemini_api_key = $_POST['gemini_api_key'];
             }
@@ -959,6 +981,7 @@ if (isset($_SESSION['username'])) {
             $xml_data->settings->archive_integration = isset($_POST['archive_integration']) ? 'true' : 'false';
 
             if ($xml_data->asXML($userFile)) {
+                generate_notes_rss($xml_data, $username);
                 $_SESSION['settings_feedback'] = 'Configuración guardada correctamente.';
             } else {
                 $_SESSION['settings_feedback'] = 'ERROR: No se pudo guardar la configuración en el archivo.';
@@ -968,11 +991,62 @@ if (isset($_SESSION['username'])) {
             exit;
         }
 
+        if (isset($_POST['edit_external_source'])) {
+            $original_url = $_POST['original_url'];
+            $new_name = trim($_POST['external_name']);
+
+            if (empty($original_url) || empty($new_name)) {
+                $_SESSION['feed_error'] = 'Error al editar. El nombre y la URL original son necesarios.';
+                header('Location: nisaba.php?view=sources');
+                exit;
+            }
+
+            $normalized_url = rtrim($original_url, '/');
+            $source_to_edit = null;
+            if (isset($xml_data->external_notes_sources)) {
+                foreach ($xml_data->external_notes_sources->source as $source_node) {
+                    if (rtrim((string)$source_node->url, '/') === $normalized_url) {
+                        $source_to_edit = $source_node;
+                        break;
+                    }
+                }
+            }
+
+            if ($source_to_edit) {
+                $source_to_edit->name = $new_name;
+
+                if (isset($_FILES['new_favicon']) && $_FILES['new_favicon']['error'] === UPLOAD_ERR_OK) {
+                    $file = $_FILES['new_favicon'];
+                    $allowed_types = ['image/png', 'image/jpeg', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/svg+xml', 'image/webp'];
+                    if (in_array($file['type'], $allowed_types) && $file['size'] < 1048576) { // 1MB limit
+                        $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+                        if (empty($extension)) $extension = 'png';
+                        $filename = 'extfav_edited_' . hash('md5', $normalized_url) . '.' . $extension;
+                        $save_path = FAVICON_DIR . '/' . $filename;
+                        if (move_uploaded_file($file['tmp_name'], $save_path)) {
+                            $favicon_path = 'data/favicons/' . $filename;
+                            if (isset($source_to_edit->favicon)) {
+                                $source_to_edit->favicon = $favicon_path;
+                            } else {
+                                $source_to_edit->addChild('favicon', $favicon_path);
+                            }
+                        }
+                    }
+                }
+                $xml_data->asXML($userFile);
+                $_SESSION['feed_success'] = 'Fuente de notas \'' . htmlspecialchars($new_name) . '\' actualizada.';
+            } else {
+                $_SESSION['feed_error'] = 'No se encontró la fuente de notas a editar.';
+            }
+
+            header('Location: nisaba.php?view=sources');
+            exit;
+        }
+
         if (isset($_POST['add_external_source'])) {
-            $external_name = trim($_POST['external_name'] ?? '');
             $external_url = trim($_POST['external_url'] ?? '');
-            if ($external_name === '' || $external_url === '') {
-                $_SESSION['feed_error'] = 'El nombre y la URL del Nisaba son obligatorios para seguir notas externas.';
+            if (empty($external_url)) {
+                $_SESSION['feed_error'] = 'La URL del Nisaba a seguir no puede estar vacía.';
                 header('Location: nisaba.php?view=sources');
                 exit;
             }
@@ -982,12 +1056,44 @@ if (isset($_SESSION['username'])) {
             }
 
             if (!filter_var($external_url, FILTER_VALIDATE_URL)) {
-                $_SESSION['feed_error'] = 'La URL proporcionada no parece válida. Revisa el formato e inténtalo de nuevo.';
+                $_SESSION['feed_error'] = 'La URL proporcionada no parece válida.';
                 header('Location: nisaba.php?view=sources');
                 exit;
             }
 
             $normalized_url = rtrim($external_url, '/');
+            $notes_feed_url = $normalized_url . '/notas.xml';
+
+            $feed_content = fetch_feed_content($notes_feed_url);
+            if (!$feed_content) {
+                $_SESSION['feed_error'] = 'No se pudo acceder a ' . htmlspecialchars($notes_feed_url) . '. Comprueba la URL y que el Nisaba externo sea accesible.';
+                header('Location: nisaba.php?view=sources');
+                exit;
+            }
+
+            libxml_use_internal_errors(true);
+            $notes_xml = simplexml_load_string($feed_content);
+            if ($notes_xml === false) {
+                $_SESSION['feed_error'] = 'El archivo notas.xml de la URL proporcionada no es un XML válido.';
+                libxml_clear_errors();
+                header('Location: nisaba.php?view=sources');
+                exit;
+            }
+            libxml_clear_errors();
+
+            $external_name = 'Nisaba Remoto';
+            if (isset($notes_xml->channel->owner_name) && trim((string)$notes_xml->channel->owner_name) !== '') {
+                $external_name = trim((string)$notes_xml->channel->owner_name);
+            } elseif (isset($notes_xml->channel->title) && trim((string)$notes_xml->channel->title) !== '') {
+                $external_name = trim((string)$notes_xml->channel->title);
+            }
+
+            $external_favicon = '';
+            if (isset($notes_xml->channel->owner_favicon) && trim((string)$notes_xml->channel->owner_favicon) !== '') {
+                $external_favicon = trim((string)$notes_xml->channel->owner_favicon);
+            } elseif (isset($notes_xml->channel->image->url) && trim((string)$notes_xml->channel->image->url) !== '') {
+                $external_favicon = trim((string)$notes_xml->channel->image->url);
+            }
 
             if (!isset($xml_data->external_notes_sources)) {
                 $xml_data->addChild('external_notes_sources');
@@ -996,74 +1102,30 @@ if (isset($_SESSION['username'])) {
             $sources_node = $xml_data->external_notes_sources;
             $existing_source = null;
             foreach ($sources_node->source as $source_node) {
-                $saved_url = isset($source_node->url) ? rtrim((string)$source_node->url, '/') : '';
-                if ($saved_url === $normalized_url) {
+                if (rtrim((string)$source_node->url, '/') === $normalized_url) {
                     $existing_source = $source_node;
                     break;
                 }
             }
 
-            $uploaded_favicon_path = '';
-            if (isset($_FILES['external_favicon']) && $_FILES['external_favicon']['error'] !== UPLOAD_ERR_NO_FILE) {
-                $file = $_FILES['external_favicon'];
-                if ($file['error'] === UPLOAD_ERR_OK) {
-                    $allowed_types = ['image/png', 'image/jpeg', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/svg+xml', 'image/webp'];
-                    if (!in_array($file['type'], $allowed_types, true)) {
-                        $_SESSION['feed_error'] = 'El favicon debe ser una imagen (PNG, JPG, ICO, GIF, SVG o WebP).';
-                        header('Location: nisaba.php?view=sources');
-                        exit;
-                    }
-                    if ($file['size'] > 1000000) {
-                        $_SESSION['feed_error'] = 'El favicon no puede superar 1MB.';
-                        header('Location: nisaba.php?view=sources');
-                        exit;
-                    }
-
-                    $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-                    if ($extension === '') {
-                        $extension = match ($file['type']) {
-                            'image/png' => 'png',
-                            'image/jpeg' => 'jpg',
-                            'image/gif' => 'gif',
-                            'image/svg+xml' => 'svg',
-                            'image/webp' => 'webp',
-                            default => 'ico',
-                        };
-                    }
-                    $filename = 'extfav_' . hash('md5', $normalized_url . microtime(true)) . '.' . $extension;
-                    $save_path = FAVICON_DIR . '/' . $filename;
-                    if (!move_uploaded_file($file['tmp_name'], $save_path)) {
-                        $_SESSION['feed_error'] = 'No se pudo guardar el favicon subido. Inténtalo de nuevo.';
-                        header('Location: nisaba.php?view=sources');
-                        exit;
-                    }
-                    $uploaded_favicon_path = 'data/favicons/' . $filename;
-                } else {
-                    $_SESSION['feed_error'] = 'Error al subir el favicon. Código: ' . $file['error'];
-                    header('Location: nisaba.php?view=sources');
-                    exit;
-                }
-            }
-
             if ($existing_source) {
                 $existing_source->name = $external_name;
-                $existing_source->url = $normalized_url;
-                if ($uploaded_favicon_path !== '') {
+                if (!empty($external_favicon)) {
                     if (isset($existing_source->favicon)) {
-                        $existing_source->favicon = $uploaded_favicon_path;
+                        $existing_source->favicon = $external_favicon;
                     } else {
-                        $existing_source->addChild('favicon', $uploaded_favicon_path);
+                        $existing_source->addChild('favicon', $external_favicon);
                     }
                 }
-                $_SESSION['feed_success'] = 'Notas externas actualizadas para ' . $external_name . '.';
+                $_SESSION['feed_success'] = 'Fuente de notas externas actualizada: ' . htmlspecialchars($external_name) . '.';
             } else {
                 $new_source = $sources_node->addChild('source');
                 $new_source->addChild('name', $external_name);
                 $new_source->addChild('url', $normalized_url);
-                if ($uploaded_favicon_path !== '') {
-                    $new_source->addChild('favicon', $uploaded_favicon_path);
+                if (!empty($external_favicon)) {
+                    $new_source->addChild('favicon', $external_favicon);
                 }
-                $_SESSION['feed_success'] = 'Ahora sigues las notas de ' . $external_name . '.';
+                $_SESSION['feed_success'] = 'Ahora sigues las notas de: ' . htmlspecialchars($external_name) . '.';
             }
 
             $xml_data->asXML($userFile);
@@ -1216,7 +1278,7 @@ if (isset($_SESSION['username'])) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Poppins:wght@500;700&family=VT323&family=Shadows+Into+Light&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Poppins:wght@500;700&family=VT323&family=Shadows+Into+Light&family=Boogaloo&family=Edu+NSW+ACT+Foundation&display=swap" rel="stylesheet">
     <style>
         :root { --font-headline: 'Poppins', sans-serif; --font-body: 'Lato', sans-serif; --text-color: #333; --bg-color: #fff; --border-color: #e0e0e0; --accent-color: #007bff; --danger-color: #d9534f; }
         body { font-family: var(--font-body); color: var(--text-color); background-color: var(--bg-color); margin: 0; display: flex; flex-direction: column; min-height: 100vh; }
@@ -1273,16 +1335,16 @@ if (isset($_SESSION['username'])) {
         .notes-stack { position: relative; width: 215px; min-height: 320px; flex: 0 0 auto; }
         .notes-stack-own { min-height: 320px; }
         .notes-stack-received { margin-top: 3rem; min-height: 320px; }
-        .notes-postit-main { display: block; position: relative; z-index: 9; background: #fff3a8; color: #433; padding: 1em 1.2em; border-radius: 6px 6px 14px 6px; box-shadow: 0 6px 12px rgba(0,0,0,0.18), inset 0 -6px 12px rgba(255,255,255,0.4); transform: rotate(-2deg); font-family: 'Shadows Into Light', cursive; font-size: 1.3em; transition: transform 0.2s ease, box-shadow 0.2s ease; text-align: center; }
+        .notes-postit-main { display: block; position: relative; z-index: 9; background: #fff3a8; color: #433; padding: 1em 1.2em; border-radius: 6px 6px 14px 6px; box-shadow: 0 6px 12px rgba(0,0,0,0.18), inset 0 -6px 12px rgba(255,255,255,0.4); transform: rotate(-2deg); font-family: 'Boogaloo', cursive; font-size: 1.3em; transition: transform 0.2s ease, box-shadow 0.2s ease; text-align: center; }
         .notes-postit-main.received { background: #ffe38f; }
         .notes-postit-main::after { content: ''; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 70px; height: 18px; background: rgba(0,0,0,0.08); border-radius: 3px; pointer-events: none; z-index: -1; }
         .notes-postit-main:hover { text-decoration: none; transform: rotate(0deg) scale(1.02); box-shadow: 0 12px 22px rgba(0,0,0,0.24), inset 0 -6px 12px rgba(255,255,255,0.5); }
-        .notes-mini { position: absolute; display: block; width: 190px; padding: 0.9em 1.15em; border-radius: 6px 6px 12px 6px; color: #3a2f2f; font-family: 'Shadows Into Light', cursive; box-shadow: 0 7px 14px rgba(0,0,0,0.2); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .notes-mini { position: absolute; display: block; width: 190px; padding: 0.9em 1.15em; border-radius: 6px 6px 12px 6px; color: #3a2f2f; box-shadow: 0 7px 14px rgba(0,0,0,0.2); transition: transform 0.2s ease, box-shadow 0.2s ease; }
         .notes-mini-received { padding-top: 1.6em; }
         .notes-mini-favicon { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 50%; overflow: hidden; background: rgba(255,255,255,0.9); box-shadow: 0 2px 5px rgba(0,0,0,0.25); padding: 3px; }
         .notes-mini-favicon img { width: 100%; height: 100%; object-fit: contain; display: block; border-radius: 50%; }
-        .notes-mini strong { display: block; font-size: 1.12em; margin-bottom: 0.4em; }
-        .notes-mini span { display: block; font-size: 1em; line-height: 1.35; }
+        .notes-mini strong { display: block; font-size: 1.12em; margin-bottom: 0.4em; font-family: 'Boogaloo', cursive; }
+        .notes-mini span { display: block; font-size: 1em; line-height: 1.35; font-family: 'Edu NSW ACT Foundation', cursive; }
         .notes-mini:hover { text-decoration: none; transform: scale(1.03); box-shadow: 0 10px 18px rgba(0,0,0,0.24); }
         .notes-stack.no-mini { min-height: 160px; }
         @media (max-width: 991.98px) {
@@ -1358,8 +1420,11 @@ if (isset($_SESSION['username'])) {
             font-family: var(--font-body);
             border-radius: 4px;
         }
+        .note-display h4 {
+            font-family: 'Boogaloo', cursive;
+        }
         .note-display p {
-	    font-family: 'Shadows Into Light', cursive;
+	    font-family: 'Edu NSW ACT Foundation', cursive;
 	    }
         .copy-btn {
             position: absolute;
@@ -1442,7 +1507,7 @@ if (isset($_SESSION['username'])) {
 <?php
 $own_notes_sidebar = [];
 if (isset($xml_data->notes)) {
-    $notes_nodes = $xml_data->xpath('//note');
+    $notes_nodes = $xml_data->notes->note;
     $notes_array = [];
     foreach ($notes_nodes as $note_node) {
         $notes_array[] = $note_node;
@@ -2102,11 +2167,7 @@ $current_feed = $_GET['feed'] ?? '';
                                 }
                                 if ($source_name !== '') {
                                     echo '<p><small>Compartida por ';
-                                    if ($source_url !== '') {
-                                        echo '<a href="' . htmlspecialchars($source_url) . '" target="_blank" rel="noopener noreferrer">' . htmlspecialchars($source_name) . '</a>';
-                                    } else {
-                                        echo htmlspecialchars($source_name);
-                                    }
+                                    echo htmlspecialchars($source_name);
                                     echo '</small></p>';
                                 }
                                 echo '<p>' . nl2br(htmlspecialchars($content_text)) . '</p>';
@@ -2122,7 +2183,7 @@ $current_feed = $_GET['feed'] ?? '';
                     <div class="notes-container">
                         <?php
                         if (isset($xml_data->notes)) {
-                            $notes_nodes = $xml_data->xpath('//note');
+                            $notes_nodes = $xml_data->notes->note;
                             $notes_array = [];
                             foreach ($notes_nodes as $note) {
                                 $notes_array[] = $note;
@@ -2171,7 +2232,21 @@ $current_feed = $_GET['feed'] ?? '';
                             unset($_SESSION['settings_feedback']);
                         }
                     ?>
-                    <form method="POST" action="?view=settings">
+                    <form method="POST" action="?view=settings" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label for="display_name">Tu nombre o nick</label>
+                            <input type="text" id="display_name" name="display_name" value="<?php echo isset($xml_data->settings->display_name) ? htmlspecialchars((string)$xml_data->settings->display_name) : ''; ?>" class="form-group input">
+                            <p style="font-size: 0.8em; color: #555;">Este nombre se mostrará en tu feed de notas públicas (notas.xml).</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="user_favicon">Tu favicon (opcional)</label>
+                            <input type="file" id="user_favicon" name="user_favicon" class="form-group input" accept="image/png,image/jpeg,image/gif,image/x-icon,image/svg+xml,image/webp">
+                            <?php if (isset($xml_data->settings->user_favicon) && !empty((string)$xml_data->settings->user_favicon)): ?>
+                                <p style="font-size: 0.8em; color: #555;">Favicon actual: <img src="<?php echo htmlspecialchars((string)$xml_data->settings->user_favicon); ?>" style="width: 24px; height: 24px; vertical-align: middle; border-radius: 4px;"></p>
+                            <?php endif; ?>
+                            <p style="font-size: 0.8em; color: #555;">Sube una imagen cuadrada (máx 512x512, 1MB). Se mostrará en tu feed de notas y cuando otros sigan tus notas.</p>
+                        </div>
+                        <hr>
                         <div class="form-group">
                             <label for="gemini_api_key">API Key de Google Gemini</label>
                             <input type="password" id="gemini_api_key" name="gemini_api_key" placeholder="************">
@@ -2322,22 +2397,14 @@ $current_feed = $_GET['feed'] ?? '';
                     </div>
                     <hr class="my-4">
                     <h3>Seguir las notas de otros usuarios</h3>
-                    <p class="text-muted">Introduce la URL base del Nisaba que deseas seguir (por ejemplo, <code>https://ejemplo.org/nisaba</code>). Durante "Actualizar Feeds" descargaremos su <code>notas.xml</code> y las verás en la sección «Notas Recibidas».</p>
-                    <form method="POST" action="nisaba.php?view=sources" class="row g-3 align-items-end mb-4" enctype="multipart/form-data">
-                        <div class="col-12 col-lg-4">
-                            <label for="external_name" class="form-label">Nombre del usuario o espacio</label>
-                            <input type="text" id="external_name" name="external_name" class="form-control" required>
-                        </div>
-                        <div class="col-12 col-lg-4">
-                            <label for="external_url" class="form-label">URL de su Nisaba</label>
+                    <p class="text-muted">Introduce la URL base del Nisaba que deseas seguir (por ejemplo, <code>https://ejemplo.org/nisaba</code>). Nisaba buscará su feed de notas, obtendrá el nombre y favicon del autor automáticamente y lo añadirá a tus fuentes.</p>
+                    <form method="POST" action="nisaba.php?view=sources" class="row g-3 align-items-end mb-4">
+                        <div class="col-12 col-lg-8">
+                            <label for="external_url" class="form-label">URL del Nisaba a seguir</label>
                             <input type="url" id="external_url" name="external_url" class="form-control" placeholder="https://ejemplo.org/nisaba" required>
                         </div>
-                        <div class="col-12 col-lg-3">
-                            <label for="external_favicon" class="form-label">Favicon (opcional)</label>
-                            <input type="file" id="external_favicon" name="external_favicon" class="form-control" accept="image/*">
-                        </div>
-                        <div class="col-12 col-lg-1 d-grid">
-                            <button type="submit" name="add_external_source" class="btn btn-primary">Añadir</button>
+                        <div class="col-12 col-lg-4 d-grid">
+                            <button type="submit" name="add_external_source" class="btn btn-primary">Seguir notas</button>
                         </div>
                     </form>
                     <?php
@@ -2354,7 +2421,7 @@ $current_feed = $_GET['feed'] ?? '';
                                 $ext_url = htmlspecialchars((string)($source_node->url ?? ''));
                                 $ext_favicon = htmlspecialchars((string)($source_node->favicon ?? ''));
                                 echo '<li class="list-group-item d-flex justify-content-between align-items-start">';
-                                echo '<div class="me-3">';
+                                echo '<div class="me-auto">';
                                 echo '<div class="fw-semibold">' . $ext_name . '</div>';
                                 if ($ext_url !== '') {
                                     echo '<small>' . $ext_url . '</small>';
@@ -2363,10 +2430,18 @@ $current_feed = $_GET['feed'] ?? '';
                                     echo '<div style="margin-top: 0.35rem;"><img src="' . $ext_favicon . '" alt="Favicon" style="width:24px; height:24px; border-radius:6px;"></div>';
                                 }
                                 echo '</div>';
-                                echo '<form method="POST" action="nisaba.php?view=sources" onsubmit="return confirm(\'¿Seguro que quieres dejar de seguir estas notas?\');" class="ms-3">';
+                                echo '<div style="display:none;">';
+                                echo '<input type="hidden" name="original_url" value="' . $ext_url . '">';
+                                echo '<input type="hidden" name="external_name" value="' . $ext_name . '">';
+                                echo '<input type="hidden" name="external_favicon" value="' . $ext_favicon . '">';
+                                echo '</div>';
+                                echo '<div class="d-flex gap-2 ms-3">';
+                                echo '<button onclick="openEditExternalSourceModal(this)" class="btn btn-outline-secondary btn-sm">Editar</button>';
+                                echo '<form method="POST" action="nisaba.php?view=sources" onsubmit="return confirm(\'¿Seguro que quieres dejar de seguir estas notas?\');" class="m-0">';
                                 echo '<input type="hidden" name="delete_external_source" value="' . $ext_url . '">';
                                 echo '<button type="submit" class="btn btn-danger btn-sm">Eliminar</button>';
                                 echo '</form>';
+                                echo '</div>';
                                 echo '</li>';
                             }
                             echo '</ul>';
@@ -2378,7 +2453,7 @@ $current_feed = $_GET['feed'] ?? '';
 
                 <div id="edit-feed-modal" class="modal">
                     <div class="modal-content">
-                        <span class="close-btn" onclick="closeModal()">&times;</span>
+                        <span class="close-btn" onclick="closeModal('edit-feed-modal')">&times;</span>
                         <h3>Editar Fuente</h3>
                         <form method="POST" action="nisaba.php" enctype="multipart/form-data">
                             <input type="hidden" name="original_url" id="edit-original-url">
@@ -2406,6 +2481,29 @@ $current_feed = $_GET['feed'] ?? '';
                         </form>
                     </div>
                 </div>
+                <div id="edit-external-source-modal" class="modal">
+                    <div class="modal-content">
+                        <span class="close-btn" onclick="closeModal('edit-external-source-modal')">&times;</span>
+                        <h3>Editar Fuente de Notas Externa</h3>
+                        <form method="POST" action="nisaba.php?view=sources" enctype="multipart/form-data">
+                            <input type="hidden" name="original_url" id="edit-external-original-url">
+                            <div class="form-group">
+                                <label for="edit-external-name">Nombre</label>
+                                <input type="text" name="external_name" id="edit-external-name" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Favicon Actual</label>
+                                <img id="edit-external-current-favicon" src="" style="width: 24px; height: 24px; vertical-align: middle; border-radius: 4px;">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-external-favicon-upload">Subir nuevo favicon (opcional)</label>
+                                <input type="file" name="new_favicon" id="edit-external-favicon-upload" class="form-control" accept="image/*">
+                            </div>
+                            <button type="submit" name="edit_external_source" class="btn btn-primary">Guardar</button>
+                        </form>
+                    </div>
+                </div>
+
             </main>
         </div>
         </div>
@@ -2505,14 +2603,34 @@ $current_feed = $_GET['feed'] ?? '';
             document.getElementById('edit-feed-modal').style.display = 'block';
         }
 
-        function closeModal() {
-            document.getElementById('edit-feed-modal').style.display = 'none';
+        function openEditExternalSourceModal(button) {
+            const li = button.closest('li');
+            const original_url = li.querySelector('input[name="original_url"]').value;
+            const external_name = li.querySelector('input[name="external_name"]').value;
+            const external_favicon = li.querySelector('input[name="external_favicon"]').value;
+
+            document.getElementById('edit-external-original-url').value = original_url;
+            document.getElementById('edit-external-name').value = external_name;
+            document.getElementById('edit-external-current-favicon').src = external_favicon;
+
+            document.getElementById('edit-external-source-modal').style.display = 'block';
+        }
+
+        function closeModal(modalId) {
+            if (modalId) {
+                document.getElementById(modalId).style.display = 'none';
+            } else {
+                // Fallback for old calls
+                document.getElementById('edit-feed-modal').style.display = 'none';
+            }
         }
 
         window.onclick = function(event) {
-            const modal = document.getElementById('edit-feed-modal');
-            if (event.target == modal) {
-                modal.style.display = "none";
+            const modals = document.getElementsByClassName('modal');
+            for (let i = 0; i < modals.length; i++) {
+                if (event.target == modals[i]) {
+                    modals[i].style.display = "none";
+                }
             }
         }
         document.addEventListener('DOMContentLoaded', function() {
