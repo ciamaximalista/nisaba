@@ -1278,9 +1278,11 @@ if (isset($_SESSION['username'])) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Poppins:wght@500;700&family=VT323&family=Shadows+Into+Light&family=Boogaloo&family=Edu+NSW+ACT+Foundation&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Covered+By+Your+Grace&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Patrick+Hand&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=VT323&display=swap" rel="stylesheet">
     <style>
-        :root { --font-headline: 'Poppins', sans-serif; --font-body: 'Lato', sans-serif; --text-color: #333; --bg-color: #fff; --border-color: #e0e0e0; --accent-color: #007bff; --danger-color: #d9534f; }
+        :root { --font-headline: 'Poppins', sans-serif; --font-body: 'Inter', sans-serif; --text-color: #333; --bg-color: #fff; --border-color: #e0e0e0; --accent-color: #007bff; --danger-color: #d9534f; }
         body { font-family: var(--font-body); color: var(--text-color); background-color: var(--bg-color); margin: 0; display: flex; flex-direction: column; min-height: 100vh; }
         .main-wrapper { min-height: 100vh; display: flex; flex-direction: column; }
         .main-container { flex-grow: 1; }
@@ -1335,7 +1337,7 @@ if (isset($_SESSION['username'])) {
         .notes-stack { position: relative; width: 215px; min-height: 320px; flex: 0 0 auto; }
         .notes-stack-own { min-height: 320px; }
         .notes-stack-received { margin-top: 3rem; min-height: 320px; }
-        .notes-postit-main { display: block; position: relative; z-index: 9; background: #fff3a8; color: #433; padding: 1em 1.2em; border-radius: 6px 6px 14px 6px; box-shadow: 0 6px 12px rgba(0,0,0,0.18), inset 0 -6px 12px rgba(255,255,255,0.4); transform: rotate(-2deg); font-family: 'Boogaloo', cursive; font-size: 1.3em; transition: transform 0.2s ease, box-shadow 0.2s ease; text-align: center; }
+        .notes-postit-main { display: block; position: relative; z-index: 9; background: #fff3a8; color: #433; padding: 1em 1.2em; border-radius: 6px 6px 14px 6px; box-shadow: 0 6px 12px rgba(0,0,0,0.18), inset 0 -6px 12px rgba(255,255,255,0.4); transform: rotate(-2deg); font-family: 'Covered By Your Grace', cursive; font-size: 1.3em; transition: transform 0.2s ease, box-shadow 0.2s ease; text-align: center; }
         .notes-postit-main.received { background: #ffe38f; }
         .notes-postit-main::after { content: ''; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 70px; height: 18px; background: rgba(0,0,0,0.08); border-radius: 3px; pointer-events: none; z-index: -1; }
         .notes-postit-main:hover { text-decoration: none; transform: rotate(0deg) scale(1.02); box-shadow: 0 12px 22px rgba(0,0,0,0.24), inset 0 -6px 12px rgba(255,255,255,0.5); }
@@ -1343,8 +1345,8 @@ if (isset($_SESSION['username'])) {
         .notes-mini-received { padding-top: 1.6em; }
         .notes-mini-favicon { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 50%; overflow: hidden; background: rgba(255,255,255,0.9); box-shadow: 0 2px 5px rgba(0,0,0,0.25); padding: 3px; }
         .notes-mini-favicon img { width: 100%; height: 100%; object-fit: contain; display: block; border-radius: 50%; }
-        .notes-mini strong { display: block; font-size: 1.12em; margin-bottom: 0.4em; font-family: 'Boogaloo', cursive; }
-        .notes-mini span { display: block; font-size: 1em; line-height: 1.35; font-family: 'Edu NSW ACT Foundation', cursive; }
+        .notes-mini strong { display: block; font-size: 1.12em; margin-bottom: 0.4em; font-family: 'Covered By Your Grace', cursive; }
+        .notes-mini span { display: block; font-size: 1em; line-height: 1.35; font-family: 'Patrick Hand', cursive; }
         .notes-mini:hover { text-decoration: none; transform: scale(1.03); box-shadow: 0 10px 18px rgba(0,0,0,0.24); }
         .notes-stack.no-mini { min-height: 160px; }
         @media (max-width: 991.98px) {
@@ -1421,10 +1423,11 @@ if (isset($_SESSION['username'])) {
             border-radius: 4px;
         }
         .note-display h4 {
-            font-family: 'Boogaloo', cursive;
+            font-family: 'Covered By Your Grace';
         }
         .note-display p {
-	    font-family: 'Edu NSW ACT Foundation', cursive;
+	    font-family: 'Patrick Hand';
+	    font-size: 1em;
 	    }
         .copy-btn {
             position: absolute;

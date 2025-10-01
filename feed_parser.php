@@ -102,19 +102,16 @@ function parse_feed_items(SimpleXMLElement $source_xml, string $feed_url, array 
         $content = extract_item_content($item, $is_atom);
         $image = extract_item_image($item, $content);
 
-        if ($image === '' && !$is_atom) {
-            $media_ns = $item->children('media', true);
-            if ($media_ns && isset($media_ns->content)) {
-                foreach ($media_ns->content as $media_content) {
-                    $attrs = $media_content->attributes();
-                    if ($attrs && isset($attrs->url)) {
-                        $image = (string)$attrs->url;
-                        break;
-                    }
+        if ($image !== '') {
+            $parsed_url = parse_url($image);
+            if (isset($parsed_url['query'])) {
+                parse_str($parsed_url['query'], $query_params);
+                $other_params = array_diff(array_keys($query_params), ['width', 'height']);
+                if (empty($other_params)) {
+                    $image = strtok($image, '?');
                 }
             }
         }
-
         $parsed_items[] = [
             'feed_url' => $feed_url,
             'guid' => $guid,
@@ -151,23 +148,27 @@ function resolve_item_link(SimpleXMLElement $item, bool $is_atom): string
         }
     }
 
+    $link_nodes = $item->xpath('link');
+    if ($link_nodes && !empty($link_nodes)) {
+        return (string)$link_nodes[0];
+    }
+
     return (string)$item->link;
 }
 
 function build_item_guid(SimpleXMLElement $item, bool $is_atom, string $link): string
 {
-    $guid = '';
+    $url_to_use = '';
+
     if ($link !== '') {
-        $guid = $link;
-    } elseif ($is_atom && isset($item->id)) {
-        $guid = (string)$item->id;
+        $url_to_use = $link;
     } elseif (isset($item->guid) && trim((string)$item->guid) !== '') {
-        $guid = (string)$item->guid;
+        $url_to_use = (string)$item->guid;
     }
 
-    $guid = trim($guid);
-    if ($guid !== '') {
-        return rtrim($guid, '/');
+    if ($url_to_use !== '') {
+        $url_without_fragment = strtok($url_to_use, '#');
+        return rtrim(trim($url_without_fragment), '/');
     }
 
     $title = (string)$item->title;
@@ -225,9 +226,11 @@ function extract_item_image(SimpleXMLElement $item, string $content_html): strin
         foreach ($item->media_content as $media_content) {
             $attrs = $media_content->attributes();
             if ($attrs && isset($attrs->url)) {
+                $url = (string)$attrs->url;
+                $url = str_replace('&', '&amp;', $url);
                 $width = isset($attrs->width) ? (int)$attrs->width : 0;
                 $height = isset($attrs->height) ? (int)$attrs->height : 0;
-                $candidates[] = ['url' => (string)$attrs->url, 'score' => max($width, $height)];
+                $candidates[] = ['url' => $url, 'score' => max($width, $height)];
             }
         }
     }
@@ -238,9 +241,11 @@ function extract_item_image(SimpleXMLElement $item, string $content_html): strin
                 foreach ($group->media_content as $media_content) {
                     $attrs = $media_content->attributes();
                     if ($attrs && isset($attrs->url)) {
+                        $url = (string)$attrs->url;
+                        $url = str_replace('&', '&amp;', $url);
                         $width = isset($attrs->width) ? (int)$attrs->width : 0;
                         $height = isset($attrs->height) ? (int)$attrs->height : 0;
-                        $candidates[] = ['url' => (string)$attrs->url, 'score' => max($width, $height)];
+                        $candidates[] = ['url' => $url, 'score' => max($width, $height)];
                     }
                 }
             }
@@ -248,9 +253,11 @@ function extract_item_image(SimpleXMLElement $item, string $content_html): strin
                 foreach ($group->media_thumbnail as $thumbnail) {
                     $attrs = $thumbnail->attributes();
                     if ($attrs && isset($attrs->url)) {
+                        $url = (string)$attrs->url;
+                        $url = str_replace('&', '&amp;', $url);
                         $width = isset($attrs->width) ? (int)$attrs->width : 0;
                         $height = isset($attrs->height) ? (int)$attrs->height : 0;
-                        $candidates[] = ['url' => (string)$attrs->url, 'score' => max($width, $height)];
+                        $candidates[] = ['url' => $url, 'score' => max($width, $height)];
                     }
                 }
             }
@@ -261,9 +268,11 @@ function extract_item_image(SimpleXMLElement $item, string $content_html): strin
         foreach ($item->media_thumbnail as $thumbnail) {
             $attrs = $thumbnail->attributes();
             if ($attrs && isset($attrs->url)) {
+                $url = (string)$attrs->url;
+                $url = str_replace('&', '&amp;', $url);
                 $width = isset($attrs->width) ? (int)$attrs->width : 0;
                 $height = isset($attrs->height) ? (int)$attrs->height : 0;
-                $candidates[] = ['url' => (string)$attrs->url, 'score' => max($width, $height)];
+                $candidates[] = ['url' => $url, 'score' => max($width, $height)];
             }
         }
     }
@@ -272,13 +281,17 @@ function extract_item_image(SimpleXMLElement $item, string $content_html): strin
         foreach ($item->enclosure as $enclosure) {
             $attrs = $enclosure->attributes();
             if ($attrs && isset($attrs->type) && strpos((string)$attrs->type, 'image') !== false && isset($attrs->url)) {
-                $candidates[] = ['url' => (string)$attrs->url, 'score' => 0];
+                $url = (string)$attrs->url;
+                $url = str_replace('&', '&amp;', $url);
+                $candidates[] = ['url' => $url, 'score' => 0];
             }
         }
     }
 
     if (empty($candidates) && isset($item->image) && trim((string)$item->image) !== '') {
-        $candidates[] = ['url' => (string)$item->image, 'score' => 0];
+        $url = (string)$item->image;
+        $url = str_replace('&', '&amp;', $url);
+        $candidates[] = ['url' => $url, 'score' => 0];
     }
 
     if (empty($candidates)) {
@@ -287,7 +300,9 @@ function extract_item_image(SimpleXMLElement $item, string $content_html): strin
             $html = (string)$item->description;
         }
         if ($html !== '' && preg_match('/<img[^>]+src="([^"]+)"/i', $html, $matches)) {
-            $candidates[] = ['url' => $matches[1], 'score' => 0];
+            $url = $matches[1];
+            $url = str_replace('&', '&amp;', $url);
+            $candidates[] = ['url' => $url, 'score' => 0];
         }
     }
 
