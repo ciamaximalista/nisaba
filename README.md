@@ -64,10 +64,10 @@ Antes de empezar, asegúrate de que tu servidor cumple con los siguientes requis
     - Navega hasta el directorio que contiene a Nisaba (el directorio padre) y ejecuta los siguientes comandos, reemplazando `nisaba` con el nombre de tu directorio si lo has cambiado. Es probable que necesites `sudo`.
 
       ```sh
-      # Cambia el propietario del directorio al usuario 'david' y al grupo 'www-data'
-      # Reemplaza 'david' con tu propio nombre de usuario si es diferente.
-      sudo chown -R david:www-data nisaba
-
+      # Cambia el propietario del directorio al usuario 'usuario' y al grupo 'www-data'
+      # Reemplaza 'usuario' con tu propio nombre de usuario.
+      sudo chown -R usuario:www-data nisaba
+      
       # Otorga permisos de escritura al grupo y establece el bit setgid
       # para que los nuevos archivos hereden el grupo 'www-data'.
       sudo chmod -R g+ws nisaba
