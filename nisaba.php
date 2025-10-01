@@ -2347,20 +2347,10 @@ $current_feed = $_GET['feed'] ?? '';
                                 ?>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label>Prompt para el análisis de Gemini</label>
-                            <div class="summary-container">
-                                <button class="copy-btn" onclick="copySummary(this)">Copiar</button>
-                                <div class="summary-box"><pre class="summary-content"><?php echo htmlspecialchars($gemini_prompt); ?></pre></div>
-                            </div>
-                            <p class="text-muted" style="font-size: 0.8em;">Para modificar este prompt edita el archivo <code>prompt.txt</code> en el directorio principal de Nisaba.</p>
-                        </div>
+
                         <hr>
-                        <div class="form-group">
-                            <label for="google_translate_api_key">API Key de Google Translate</label>
-                            <input type="password" id="google_translate_api_key" name="google_translate_api_key" placeholder="************" value="<?php echo htmlspecialchars($google_api_key); ?>">
-                            <p style="font-size: 0.8em; color: #555;">Clave guardada: <code><?php echo mask_api_key($google_api_key); ?></code></p>
-                        </div>
+                        
+
                         <div class="form-group">
                             <label for="cache_duration">Permanencia de artículos leídos en la caché</label>
                             <select id="cache_duration" name="cache_duration" class="form-group input">
@@ -2393,14 +2383,23 @@ $current_feed = $_GET['feed'] ?? '';
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="archive_integration" style="display: flex; align-items: center; gap: 0.5em;">
-                                <input type="checkbox" id="archive_integration" name="archive_integration" value="1" <?php echo $archive_integration_enabled ? 'checked' : ''; ?>>
-                                Integración con Archive.today
-                            </label>
-                            <p style="font-size: 0.8em; color: #555;">Muestra un enlace directo a la copia almacenada en Archive.today cuando abras un artículo.</p>
+                            <label for="archive_integration">Integración con Archive.today</label>
+                            <input type="checkbox" id="archive_integration" name="archive_integration" value="1" <?php echo $archive_integration_enabled ? 'checked' : ''; ?>>
+                            <p style="font-size: 0.8em; color: #555; margin-top:none;">Muestra un enlace directo a la copia almacenada en Archive.today cuando abras un artículo.</p>
                         </div>
                         <button type="submit" name="save_settings" class="btn btn-primary">Guardar Configuración</button>
                     </form>
+                    
+                    <hr/>
+                    
+                        <div class="form-group">
+                            <h4>Prompt para el análisis de Gemini</h4>
+                            <div class="summary-container">
+                                <button class="copy-btn" onclick="copySummary(this)">Copiar</button>
+                                <div class="summary-box"><pre class="summary-content"><?php echo htmlspecialchars($gemini_prompt); ?></pre></div>
+                            </div>
+                            <p class="text-muted" style="font-size: 0.8em;">Para modificar este prompt edita el archivo <code>prompt.txt</code> en el directorio principal de Nisaba.</p>
+                        </div>
                 <?php else: ?>
                     <h2>Gestionar Fuentes</h2>
                     <?php if ($feed_error): ?><p class="error"><?php echo $feed_error; ?></p><?php endif; ?>
