@@ -1476,6 +1476,21 @@ if (isset($_SESSION['username'])) {
             text-decoration: none;
             cursor: pointer;
         }
+        .article-nav {
+            display: flex;
+            gap: 1.5em;
+            font-size: 0.9em;
+            margin: 1em 0;
+        }
+        .article-nav a {
+            color: #555;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        .article-nav a:hover {
+            color: var(--accent-color);
+            text-decoration: none;
+        }
     </style>
 </head>
 <body>
@@ -1881,7 +1896,14 @@ $current_feed = $_GET['feed'] ?? '';
                         }
                     ?>
                     <?php if ($article): ?>
-                        <a href="?feed=<?php echo urlencode((string)$article->feed_url); ?>&folder=<?php echo urlencode($_GET['folder'] ?? ''); ?>">&larr; Volver al feed</a>
+                        <div class="article-nav">
+                            <a href="?feed=<?php echo urlencode((string)$article->feed_url); ?>&folder=<?php echo urlencode($_GET['folder'] ?? ''); ?>">&larr; Volver al feed</a>
+                            <?php if (!empty($_GET['folder'])):
+                            ?>
+                                <a href="?view=folder&name=<?php echo urlencode($_GET['folder']); ?>">&larr; Volver a la carpeta</a>
+                            <?php endif; ?>
+                            <a href="?view=all_feeds">&larr; Ver todos</a>
+                        </div>
                         <hr>
                         <?php 
                             $article_title = !empty($article->title_translated) ? $article->title_translated : $article->title_original;
@@ -1918,6 +1940,14 @@ $current_feed = $_GET['feed'] ?? '';
 <?php endif; ?>
                         </div>
                         <hr>
+                        <div class="article-nav">
+                            <a href="?feed=<?php echo urlencode((string)$article->feed_url); ?>&folder=<?php echo urlencode($_GET['folder'] ?? ''); ?>">&larr; Volver al feed</a>
+                            <?php if (!empty($_GET['folder'])):
+                            ?>
+                                <a href="?view=folder&name=<?php echo urlencode($_GET['folder']); ?>">&larr; Volver a la carpeta</a>
+                            <?php endif; ?>
+                            <a href="?view=all_feeds">&larr; Ver todos</a>
+                        </div>
                         <h3>Notas</h3>
                         <form method="POST" action="nisaba.php" class="note-form">
                             <input type="hidden" name="article_guid" value="<?php echo htmlspecialchars($article->guid); ?>">
@@ -1990,7 +2020,7 @@ $current_feed = $_GET['feed'] ?? '';
                                         echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '">' . htmlspecialchars($display_title) . '</a></h3>';
                                         echo '<p>' . htmlspecialchars(truncate_text($display_desc, 500)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
                                         if (!$is_read) {
-                                            echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn mark-as-read-btn">Marcar leído</a></div>';
+                                            echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
                                         }
                                         echo '</li>';
                                     }
@@ -1999,6 +2029,7 @@ $current_feed = $_GET['feed'] ?? '';
                         } else { echo "<li>No se ha generado la cache.</li>"; }
                         ?>
                     </ul>
+                    <div style="margin-top: 1em;"><button onclick="markAllRead()" class="btn btn-outline-success btn-sm">Todos leídos</button></div>
                 <?php elseif ($current_view === 'folder'): ?>
                     <?php 
                         $folder_name = isset($_GET['name']) ? $_GET['name'] : '';
@@ -2069,7 +2100,7 @@ $current_feed = $_GET['feed'] ?? '';
                                     echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '&folder=' . urlencode($folder_name) . '">' . htmlspecialchars($display_title) . '</a></h3>';
                                     echo '<p>' . htmlspecialchars(truncate_text($display_desc, 1250)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
                                     if (!$is_read) {
-                                        echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn mark-as-read-btn">Marcar leído</a></div>';
+                                        echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
                                     }
                                     echo '</li>';
                                 }
@@ -2077,6 +2108,7 @@ $current_feed = $_GET['feed'] ?? '';
                         } else { echo "<li>Carpeta no encontrada o cache no generada.</li>"; }
                         ?>
                     </ul>
+                    <div style="margin-top: 1em;"><button onclick="markAllRead()" class="btn btn-outline-success btn-sm">Todos leídos</button></div>
                 <?php elseif ($current_view === 'feed_articles'): ?>
                     <?php
                         $selected_feed_url = $_GET['feed'];
@@ -2119,7 +2151,7 @@ $current_feed = $_GET['feed'] ?? '';
                                     echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '&folder=' . urlencode($_GET['folder'] ?? '') . '">' . htmlspecialchars($display_title) . '</a></h3>';
                                     echo '<p>' . htmlspecialchars(truncate_text($display_desc, 1250)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
                                     if (!$is_read) {
-                                        echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn mark-as-read-btn">Marcar leído</a></div>';
+                                        echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
                                     }
                                     echo '</li>';
                                 }}
@@ -2127,6 +2159,7 @@ $current_feed = $_GET['feed'] ?? '';
                         } else { echo "<li>No se ha generado la cache.</li>"; }
                         ?>
                     </ul>
+                    <div style="margin-top: 1em;"><button onclick="markAllRead()" class="btn btn-outline-success btn-sm">Todos leídos</button></div>
                 <?php elseif ($current_view === 'received_notes'): ?>
                     <h2>Notas Recibidas</h2>
                     <div class="notes-container">
