@@ -59,15 +59,20 @@ Antes de empezar, asegúrate de que tu servidor cumple con los siguientes requis
     - **Opción B (ZIP)**: Descarga el archivo ZIP desde el [repositorio de GitHub](https://github.com/ciamaximalista/nisaba) y descomprímelo en el directorio de tu servidor web.
 
 2.  **Configura los Permisos**:
-    - Nisaba guarda todos sus datos (usuarios, feeds, caché) en el directorio `data/`. Es crucial que el servidor web tenga permiso para escribir en él.
-    - Desde el directorio raíz de Nisaba, ejecuta el siguiente comando. Puede que necesites usar `sudo` dependiendo de la configuración de tu servidor:
+    - Nisaba necesita crear y escribir en el directorio `data/` para guardar toda la información (usuario, feeds, caché, etc.).
+    - Para que esto funcione, el servidor web (normalmente el usuario `www-data` en sistemas Debian/Ubuntu) necesita permisos de escritura sobre el directorio principal de Nisaba.
+    - Navega hasta el directorio que contiene a Nisaba (el directorio padre) y ejecuta los siguientes comandos, reemplazando `nisaba` con el nombre de tu directorio si lo has cambiado. Es probable que necesites `sudo`.
+
       ```sh
-      # Otorga permisos al grupo del servidor web (www-data es común en Debian/Ubuntu)
-      chown -R :www-data data
-      # Otorga permisos de escritura al grupo
-      chmod -R 775 data
+      # Cambia el propietario del directorio al usuario 'david' y al grupo 'www-data'
+      # Reemplaza 'david' con tu propio nombre de usuario si es diferente.
+      sudo chown -R david:www-data nisaba
+
+      # Otorga permisos de escritura al grupo y establece el bit setgid
+      # para que los nuevos archivos hereden el grupo 'www-data'.
+      sudo chmod -R g+ws nisaba
       ```
-    - Si no estás seguro de cuál es el usuario de tu servidor web, puedes probar con `chmod -R 777 data`, aunque es una opción menos segura.
+    - Estos comandos aseguran que tanto tú como el servidor web podáis gestionar los archivos, y que la aplicación pueda crear el directorio `data/` y escribir en él sin problemas.
 
 3.  **Primer Acceso y Creación de Usuario**:
     - Abre tu navegador y ve a la URL donde has instalado Nisaba (por ejemplo, `http://tu-dominio.com/nisaba/nisaba.php`).

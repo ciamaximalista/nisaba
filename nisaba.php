@@ -366,16 +366,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
         } elseif (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
             $error = 'El nombre de usuario solo puede contener letras, números y guiones bajos.';
         } else {
+            // Try to create the data directory if it doesn't exist
             if (!is_dir(DATA_DIR)) {
-                mkdir(DATA_DIR, 0755, true);
+                if (!@mkdir(DATA_DIR, 0755, true)) {
+                    $error = 'ERROR CRÍTICO: No se pudo crear el directorio <code>' . htmlspecialchars(DATA_DIR) . '</code>. Por favor, asegúrate de que el servidor web tiene permisos de escritura en el directorio de la aplicación.';
+                }
             }
-            $passwordHash = password_hash($password, PASSWORD_DEFAULT);
-            $xml = new SimpleXMLElement('<user><password/><feeds/><notes/><settings/><read_guids/></user>');
-            $xml->password = $passwordHash;
-            $xml->asXML(DATA_DIR . '/' . $username . '.xml');
-            $_SESSION['username'] = $username;
-            header('Location: nisaba.php?view=all_feeds');
-            exit;
+
+            // If the directory exists, check if it's writable
+            if (empty($error) && !is_writable(DATA_DIR)) {
+                $error = 'ERROR CRÍTICO: El directorio <code>' . htmlspecialchars(DATA_DIR) . '</code> no tiene permisos de escritura. Por favor, ajusta los permisos.';
+            }
+
+            if (empty($error)) {
+                $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+                $xml = new SimpleXMLElement('<user><password/><feeds/><notes/><settings/><read_guids/></user>');
+                $xml->password = $passwordHash;
+                $userFilePath = DATA_DIR . '/' . $username . '.xml';
+                
+                if (@$xml->asXML($userFilePath)) {
+                    // Try to create the favicons subdirectory
+                    if (!is_dir(FAVICON_DIR)) {
+                        @mkdir(FAVICON_DIR, 0755, true);
+                    }
+                    $_SESSION['username'] = $username;
+                    header('Location: nisaba.php?view=all_feeds');
+                    exit;
+                } else {
+                    $error = 'ERROR CRÍTICO: No se pudo escribir el archivo de usuario en <code>' . htmlspecialchars($userFilePath) . '</code>. Por favor, verifica los permisos.';
+                }
+            }
         }
     }
 }
