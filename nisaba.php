@@ -1500,9 +1500,9 @@ if (isset($_SESSION['username'])) {
                     <aside class="sidebar h-100">
                         <div class="logo text-center mb-4"><img src="nisaba.png" alt="Logo Nisaba"></div>
                         <div class="d-grid gap-2 mb-4">
-                            <a href="?update_cache=1" class="btn btn-primary">Actualizar Feeds</a>
-                            <a href="?view=nisaba_summary" class="btn btn-secondary">Análisis</a>
-                            <a href="?action=translate" class="btn btn-outline-primary">Traducir Nuevos</a>
+                            <a href="?update_cache=1" class="btn btn-primary" style="background-color: darkblue; border-color: darkblue;">Actualizar Feeds</a>
+                            <a href="?view=nisaba_summary" class="btn btn-secondary" style="background-color: #1b8eed; border-color: #1b8eed;">Análisis</a>
+                            <a href="#" id="translate-help-button" class="btn btn-info" style="background-color: skyblue; border-color: skyblue;">Traducir</a>
                         </div>
 <?php
 $own_notes_sidebar = [];
@@ -2634,6 +2634,7 @@ $current_feed = $_GET['feed'] ?? '';
             }
         }
         document.addEventListener('DOMContentLoaded', function() {
+            // Font size controls
             if (document.getElementById('increase-font')) {
                 const body = document.querySelector('.content');
                 const increaseButton = document.getElementById('increase-font');
@@ -2659,8 +2660,59 @@ $current_feed = $_GET['feed'] ?? '';
                     localStorage.setItem('fontSize', currentSize);
                 });
             }
+
+            // Translation help modal
+            const modal = document.getElementById("translation-help-modal");
+            const btn = document.getElementById("translate-help-button");
+            const span = document.getElementsByClassName("translate-close-btn")[0];
+
+            if (btn && modal) {
+                btn.addEventListener("click", function(event) {
+                    event.preventDefault();
+                    modal.style.display = "block";
+                });
+            }
+
+            if (span && modal) {
+                span.addEventListener("click", function() {
+                    modal.style.display = "none";
+                });
+            }
         });
         </script>
+        </div>
+        <div id="translation-help-modal" class="modal">
+            <div class="modal-content">
+                <span class="close-btn translate-close-btn">&times;</span>
+                <h2>Ayuda de Traducción</h2>
+                <div class="translate-modal-body">
+                  <p>Esta página está preparada para que tu navegador la traduzca automáticamente. Si la ventana de traducción no apareció, ¡no te preocupes! Puedes hacerlo manualmente y configurarlo para el futuro.</p>
+                  
+                  <div class="browser-section">
+                    <h4><img src="https://www.google.com/chrome/static/images/favicons/favicon-32x32.png" alt="Chrome" class="browser-icon"> Google Chrome / Edge</h4>
+                    <p>Sigue estos pasos para asegurar que la traducción siempre funcione correctamente:</p>
+                    <ol>
+                      <li>Pulsa en "Todos" para ver el listado de todas las noticias (es donde es más fácil que tengas contenidos en varias lenguas)</li>
+                      <li>Haz <strong>clic derecho</strong> en cualquier lugar de la página y selecciona <strong>"Traducir al español"</strong>.</li>
+                      <li>Si en la pequeña ventana emergente del navegador, como idioma de origen sale un idioma distinto a "Idioma detectado", pulsa los tres puntos (Opciones) y selecciona "La página no está en...".</li>
+                      <li>En el menú desplegable que te saldrá elige <strong>"Idioma detectado"</strong>.</li>
+                      <li>Activa la casilla <strong>"Traducir siempre"</strong> y acepta. Todo te aparecerá traducido ahora: titulares y entradillas.</li>
+                      <li>En la vista de noticias individuales no te preocupes si no te ofrece "Idioma detectado", marca "Traducir siempre" y acepta.</li>
+                    </ol>
+                  </div>
+
+                  <div class="browser-section">
+                    <h4><img src="https://www.mozilla.org/media/img/favicons/firefox/browser/favicon-32x32.png" alt="Firefox" class="browser-icon"> Mozilla Firefox</h4>
+                    <p>Las versiones modernas de Firefox incluyen una función de traducción privada y automática.</p>
+                    <ol>
+                      <li>Al visitar la página, debería aparecer un panel de traducción. Si no es así, busca el icono de traducción en la barra de herramientas.</li>
+                      <li>En el panel, asegúrate de que el idioma de origen esté bien detectado y elige "Español" como destino.</li>
+                      <li>Haz clic en el botón <strong>"Traducir"</strong>.</li>
+                      <li>Puedes usar el icono de engranaje (Opciones) en el panel para marcar la opción <strong>"Traducir siempre"</strong>.</li>
+                    </ol>
+                  </div>
+                </div>
+            </div>
         </div>
     <?php else: ?>
         <div class="auth-container">
