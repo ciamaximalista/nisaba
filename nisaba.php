@@ -2,6 +2,7 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 session_start();
+header('Content-Type: text/html; charset=UTF-8');
 
 // --- 1. CONFIGURACIÓN Y FUNCIONES AUXILIARES ---
 
@@ -1696,8 +1697,8 @@ $current_feed = $_GET['feed'] ?? '';
     $style = sprintf('background:%s; top:%dpx; left:%dpx; transform: rotate(%s); z-index:%d;', $color, $top, $left, $rotate, $zIndex);
 ?>
                                 <a href="<?php echo htmlspecialchars($entry['link']); ?>" class="notes-mini" style="<?php echo htmlspecialchars($style, ENT_QUOTES); ?>">
-                                    <strong><?php echo htmlspecialchars($entry['title']); ?></strong>
-                                    <?php if (!empty($entry['excerpt'])): ?><span><?php echo htmlspecialchars($entry['excerpt']); ?></span><?php endif; ?>
+                                    <strong><?php echo htmlspecialchars($entry['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></strong>
+                                    <?php if (!empty($entry['excerpt'])): ?><span><?php echo htmlspecialchars($entry['excerpt'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></span><?php endif; ?>
                                 </a>
 <?php endforeach; ?>
                                 </div>

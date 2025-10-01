@@ -4,7 +4,7 @@
 
 Con la ayuda de IA de última generación, Nisaba te ayudará a **leer las noticias de una manera diferente**, al modo de un analista profesional. Nisaba te dará en un párrafo el marco apasionante del gran juego estratégico que da sentido al escenario geopolítico, económico, tecnológico y cultural. Luego lo relacionará con las innovaciones y cambios disruptivos que podrían convertirse en nuevas tendencias y cambios globales en breve. Y finalmente te lo justificará señalándote los artículos en los que se basa y por qué.
 
-Elige tus fuentes y agrega los medios de todo el mundo que más confianza te den. No te preocupes por la lengua,, la IA los traducirá por ti. 
+Elige tus fuentes y agrega los medios de todo el mundo que más confianza te den. No te preocupes por el idioma, Nisaba está diseñado para integrarse con la función de traducción nativa de tu navegador (Chrome, Firefox, etc.). 
 
 Y recuerda: todo lo que la IA te presentará en sus informes está en las noticias con que la alimentas, sólo te muestra lo que el ruido no deja escuchar ni entender. Verás que la realidad global es mucho más apasionante que las banderías, las *fake news* y las *conspiranoias*.
 
@@ -13,7 +13,11 @@ Y recuerda: todo lo que la IA te presentará en sus informes está en las notici
 1. Tras configurar la app, sube  feeds (fuentes RSS o Atom) de periodicos y revistas de todo el mundo, no te preocupes por el idioma y ponlas en una misma carpeta, llámala por ejemplo «Noticias».
 2. Actualiza las feeds pulsando el botón de arriba a la izquierda. Si has puesto muchas puede tardar un rato en bajarlas todas.
 3. Pulsa el botón «Análisis. Te aparecerá, por cada carpeta de fuentes que hayas añadido, un informe de análisis como los que elaboran los principales *think tanks* del mundo. Cada uno tiene un botón en la esquina superior derecha para que lo copies y lo guardes como quieras.
-4. Pulsa el botón «Traducir Nuevos» y lee tranquilamente en español las noticias que más te interesen carpeta a carpeta o fuente a fuente. Puedes usar como guía el informe que preparó Gemini para ti y que leíste antes. En cada noticia podrás tomar notas que puedes compartir mediante RSS con otras personas, incorporar a tu blog o web personal o usar para programar envíos a redes sociales.
+4. Lee las noticias. Nisaba se integra con la función de traducción de tu navegador.
+   - Al ver una lista de noticias en varios idiomas, el navegador debería detectar el contenido mixto y ofrecerte traducirlo.
+   - Al abrir un artículo en otro idioma, el navegador debería ofrecerte la traducción automáticamente.
+   - **Si la ventana emergente de traducción no aparece** o la cierras por error, simplemente haz clic con el **botón derecho del ratón** en cualquier parte de la página y selecciona **"Traducir al español"** (o tu idioma).
+   - *Consejo para Chrome/Edge*: Si el navegador se equivoca de idioma (ej. dice "inglés" pero hay varios), en la misma ventana emergente de traducción, haz clic en los tres puntos, elige "Elegir otro idioma" y selecciona "Idioma detectado" en el menú desplegable superior.
 
 ## Funcionalidades Principales
 
@@ -22,7 +26,7 @@ Y recuerda: todo lo que la IA te presentará en sus informes está en las notici
 - **Importación/Exportación OPML**: Migra fácilmente tus suscripciones desde o hacia otros lectores de feeds.
 - **Gestión de Artículos**: Marca artículos como leídos de forma individual o masiva.
 - **Caché Configurable**: Elige si los artículos leídos se ocultan inmediatamente o si permanecen visibles (en gris) durante 24 o 48 horas antes de ser eliminados de la caché.
-- **Traducción Automática**: Integra la API de Google Translate para traducir al español los artículos de feeds en otros idiomas.
+- **Traducción Integrada con el Navegador**: En lugar de usar una API externa, Nisaba le indica a tu navegador el idioma del contenido para que puedas usar su función de traducción nativa, instantánea y gratuita.
 - **Análisis con IA**: Utiliza la API de Google Gemini para generar análisis estratégicos y encontrar elementos  disruptivos y cambios de tendencias en tus artículos no leídos, agrupados por carpeta.
 - **Notas Personales**: Toma notas sobre cualquier artículo o resumen. Tus notas se guardan y son accesibles en cualquier momento.
 - **Recibir Notas**: Puedes suscribirte a las notas de otros usuarios para leer y analizar en equipo.
@@ -91,20 +95,7 @@ Esta API te permite usar la función "Análisis" para obtener resúmenes estrat�
     - Selecciona el modelo de Gemini que prefieras (por ejemplo, `gemini-1.5-pro-latest`).
     - Opcionalmente, puedes personalizar el *prompt* que se usa para generar los análisis para adaptarlo a tus intereses.
 
-#### b) API Key de Google Translate (para Traducción)
 
-Esta API te permite traducir artículos de otros idiomas al español.
-
-1.  **Obtén tu API Key**:
-    - Ve a la [Consola de Google Cloud](https://console.cloud.google.com/).
-    - Crea un nuevo proyecto o selecciona uno existente.
-    - En el menú de navegación, ve a "APIs y servicios" > "Biblioteca".
-    - Busca "Cloud Translation API" y actívala para tu proyecto.
-    - Ve a "APIs y servicios" > "Credenciales".
-    - Haz clic en "Crear credenciales" > "Clave de API".
-    - Copia la clave que se genera.
-2.  **Guárdala en Nisaba**:
-    - En la página de configuración de Nisaba, pega la clave en el campo "API Key de Google Translate".
 
 3.  **Guarda la Configuración**:
     - Haz clic en el botón "Guardar Configuración" al final de la página.
@@ -115,7 +106,7 @@ Esta API te permite traducir artículos de otros idiomas al español.
 
 - **Gestionar Fuentes**: Añade nuevas fuentes RSS o importa un archivo OPML desde la sección "Gestionar Fuentes". Aquí también puedes editar el nombre, la carpeta y el idioma de cada feed.
 - **Actualizar Feeds**: Haz clic en "Actualizar Feeds" para descargar los últimos artículos de todas tus suscripciones.
-- **Traducir y Analizar**: Usa los botones "Traducir Nuevos" y "Análisis" para procesar los artículos descargados.
+- **Analizar**: Usa el botón "Análisis" para procesar los artículos descargados y obtener resúmenes estratégicos.
 
 
 ## Licencia
