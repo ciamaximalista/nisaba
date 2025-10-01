@@ -366,6 +366,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
         } elseif (!preg_match('/^[a-zA-Z0-9_]+$/', $username)) {
             $error = 'El nombre de usuario solo puede contener letras, números y guiones bajos.';
         } else {
+            if (!is_dir(DATA_DIR)) {
+                mkdir(DATA_DIR, 0755, true);
+            }
             $passwordHash = password_hash($password, PASSWORD_DEFAULT);
             $xml = new SimpleXMLElement('<user><password/><feeds/><notes/><settings/><read_guids/></user>');
             $xml->password = $passwordHash;
