@@ -293,19 +293,15 @@ function get_gemini_summary($content, $api_key, $model, $prompt_template) {
     return $response['candidates'][0]['content']['parts'][0]['text'];
 }
 
-function truncate_text($text, $word_limit) {
-    $plain_text = strip_tags($text);
-    $plain_text = html_entity_decode($plain_text, ENT_QUOTES | ENT_XML1, 'UTF-8');
-    $plain_text = str_replace(['“', '”', '„', '«', '»'], '"', $plain_text);
-    $plain_text = str_replace(['‘', '’', '‚', '‹', '›'], "'", $plain_text);
-    $plain_text = str_replace("\xC2\xA0", ' ', $plain_text);
-    $plain_text = preg_replace('/\s+/u', ' ', $plain_text);
-    $words = str_word_count($plain_text, 1, 'àáâãäçèéêëìíîïñòóôõöùúûüýÿÀÁÂÃÄÇÈÉÊËÌÍÎÏÑÒÓÔÕÖÙÚÛÜÝŸ');
-    if (count($words) > $word_limit) {
-        $truncated_words = array_slice($words, 0, $word_limit);
-        return implode(' ', $truncated_words) . '...';
+function truncate_text($text, $char_limit) {
+    if (!is_string($text)) {
+        return '';
     }
-    return $plain_text;
+    $trimmed_text = trim($text);
+    if (mb_strlen($trimmed_text, 'UTF-8') <= $char_limit) {
+        return $trimmed_text;
+    }
+    return mb_strimwidth($trimmed_text, 0, $char_limit, '...', 'UTF-8');
 }
 
 function normalize_feed_text($text) {
@@ -1537,7 +1533,7 @@ foreach ($own_notes_sidebar as $note_item) {
     $title = normalize_feed_text($note_item->article_title ?? '');
     if ($title === '') $title = 'Nota sin título';
     $excerpt = normalize_feed_text($note_item->content ?? '');
-    $excerpt = $excerpt !== '' ? truncate_text($excerpt, 12) : 'Sin contenido';
+    $excerpt = $excerpt !== '' ? truncate_text($excerpt, 60) : 'Sin contenido';
     $sidebar_own_entries[] = [
         'type' => 'own',
         'title' => $title,
@@ -1558,7 +1554,7 @@ foreach ($received_notes_sidebar as $note_item) {
     $title = normalize_feed_text($note_item->title ?? '');
     if ($title === '') $title = 'Nota recibida';
     $excerpt = normalize_feed_text($note_item->content ?? '');
-    $excerpt = $excerpt !== '' ? truncate_text($excerpt, 12) : 'Sin contenido';
+    $excerpt = $excerpt !== '' ? truncate_text($excerpt, 60) : 'Sin contenido';
     $source_name = normalize_feed_text($note_item->source_name ?? '');
     if ($source_name !== '') {
         $excerpt = ($excerpt !== '' ? $excerpt . ' · ' : '') . 'Por ' . $source_name;
@@ -1992,7 +1988,7 @@ $current_feed = $_GET['feed'] ?? '';
                                         echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
                                         if (!empty($item->image)) echo '<img src="' . htmlspecialchars($item->image) . '" alt="" class="article-image">';
                                         echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '">' . htmlspecialchars($display_title) . '</a></h3>';
-                                        echo '<p>' . htmlspecialchars(truncate_text($display_desc, 100)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
+                                        echo '<p>' . htmlspecialchars(truncate_text($display_desc, 500)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
                                         if (!$is_read) {
                                             echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn mark-as-read-btn">Marcar leído</a></div>';
                                         }
@@ -2071,7 +2067,7 @@ $current_feed = $_GET['feed'] ?? '';
                                     echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
                                     if (!empty($item->image)) echo '<img src="' . htmlspecialchars($item->image) . '" alt="" class="article-image">';
                                     echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '&folder=' . urlencode($folder_name) . '">' . htmlspecialchars($display_title) . '</a></h3>';
-                                    echo '<p>' . htmlspecialchars(truncate_text($display_desc, 250)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
+                                    echo '<p>' . htmlspecialchars(truncate_text($display_desc, 1250)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
                                     if (!$is_read) {
                                         echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn mark-as-read-btn">Marcar leído</a></div>';
                                     }
@@ -2121,7 +2117,7 @@ $current_feed = $_GET['feed'] ?? '';
                                     echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
                                     if (!empty($item->image)) echo '<img src="' . htmlspecialchars($item->image) . '" alt="" class="article-image">';
                                     echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '&folder=' . urlencode($_GET['folder'] ?? '') . '">' . htmlspecialchars($display_title) . '</a></h3>';
-                                    echo '<p>' . htmlspecialchars(truncate_text($display_desc, 250)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
+                                    echo '<p>' . htmlspecialchars(truncate_text($display_desc, 1250)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
                                     if (!$is_read) {
                                         echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn mark-as-read-btn">Marcar leído</a></div>';
                                     }
@@ -2154,7 +2150,7 @@ $current_feed = $_GET['feed'] ?? '';
                                 $title = normalize_feed_text($note_entry->title ?? '');
                                 if ($title === '') $title = 'Nota recibida';
                                 $content_text = normalize_feed_text($note_entry->content ?? '');
-                                $content_text = $content_text !== '' ? truncate_text($content_text, 80) : 'Sin contenido';
+                                $content_text = $content_text !== '' ? truncate_text($content_text, 400) : 'Sin contenido';
                                 $source_name = normalize_feed_text($note_entry->source_name ?? '');
                                 $source_url = (string)($note_entry->source_url ?? '');
                                 $favicon = (string)($note_entry->favicon ?? '');
