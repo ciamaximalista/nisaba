@@ -1,6 +1,18 @@
 <?php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
+
+// Isolate session cookies to the script's directory to prevent collisions
+$cookie_path = dirname($_SERVER['SCRIPT_NAME']);
+if ($cookie_path === '/' || $cookie_path === '.') {
+    $cookie_path = '/';
+} else {
+    $cookie_path = rtrim($cookie_path, '/') . '/';
+}
+session_set_cookie_params([
+    'path' => $cookie_path,
+    'samesite' => 'Lax' // Recommended for security
+]);
 session_start();
 header('Content-Type: text/html; charset=UTF-8');
 
