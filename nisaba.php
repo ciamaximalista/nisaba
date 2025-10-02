@@ -234,6 +234,88 @@ function generate_notes_rss($xml_data, $username) {
     $rss->asXML(__DIR__ . '/notas.xml');
 }
 
+function format_summary_for_rss($summary_text) {
+    $lines = explode("\n", $summary_text);
+    $html = '';
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (empty($line)) {
+            continue;
+        }
+        if (str_starts_with($line, '###')) {
+            $html .= '<h3>' . htmlspecialchars(trim(substr($line, 3))) . '</h3>';
+        } elseif (str_starts_with($line, '##')) {
+            $html .= '<h2>' . htmlspecialchars(trim(substr($line, 2))) . '</h2>';
+        } elseif (str_starts_with($line, '#')) {
+            $html .= '<h1>' . htmlspecialchars(trim(substr($line, 1))) . '</h1>';
+        } else {
+            $html .= '<p>' . htmlspecialchars($line) . '</p>';
+        }
+    }
+    return $html;
+}
+
+function generate_analysis_rss($xml_data, $username) {
+    $rss = new SimpleXMLElement('<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"></rss>');
+    $channel = $rss->addChild('channel');
+
+    $display_name = '';
+    if (isset($xml_data->settings->display_name)) {
+        $display_name = trim((string)$xml_data->settings->display_name);
+    }
+    $owner_name = $display_name !== '' ? $display_name : $username;
+
+    $channel->addChild('title', 'Análisis de Nisaba para ' . $owner_name);
+    $channel->addChild('link', nisaba_public_url('analisis.xml'));
+    $channel->addChild('description', 'Feed con los análisis de prospectiva generados por Nisaba para ' . $owner_name);
+    $channel->addChild('language', 'es-es');
+    $channel->addChild('generator', 'Nisaba');
+
+    if (isset($xml_data->summaries)) {
+        $summaries_nodes = $xml_data->summaries->summary;
+        $summaries_array = [];
+        foreach ($summaries_nodes as $summary) {
+            $summaries_array[] = $summary;
+        }
+
+        usort($summaries_array, function($a, $b) {
+            $date_a = isset($a['date']) ? strtotime((string)$a['date']) : 0;
+            $date_b = isset($b['date']) ? strtotime((string)$b['date']) : 0;
+            return $date_b - $date_a;
+        });
+
+        foreach ($summaries_array as $summary) {
+            if (!isset($summary['date'])) continue;
+
+            $folder_name = (string)$summary['folder'];
+            $date_c = (string)$summary['date'];
+            $timestamp = strtotime($date_c);
+
+            $item = $channel->addChild('item');
+
+            $title = 'Análisis de ' . htmlspecialchars($folder_name) . ' el ' . date('d/m/Y', $timestamp);
+            $item->addChild('title', $title);
+
+            $description = 'Análisis de ' . htmlspecialchars($folder_name) . ' el ' . date('d/m/Y', $timestamp) . ' a las ' . date('H:i', $timestamp) . ' desde el Nisaba de ' . htmlspecialchars($owner_name);
+            $item->addChild('description', $description);
+
+            $formatted_content = format_summary_for_rss((string)$summary);
+            
+            $content_node = $item->addChild('content:encoded');
+            $content_node_dom = dom_import_simplexml($content_node);
+            $content_node_dom->appendChild($content_node_dom->ownerDocument->createCDATASection($formatted_content));
+
+            $item->addChild('pubDate', date(DATE_RSS, $timestamp));
+            $guid = 'analisis-' . md5($folder_name . $date_c);
+            $item->addChild('guid', $guid);
+            $item->guid->addAttribute('isPermaLink', 'false');
+            $item->addChild('link', nisaba_public_url('?view=nisaba_summary'));
+        }
+    }
+
+    $rss->asXML(__DIR__ . '/analisis.xml');
+}
+
 function mask_api_key($key) {
     if (strlen($key) < 8) {
         return 'No guardada o demasiado corta.';
@@ -811,7 +893,7 @@ if (isset($_SESSION['username'])) {
                     };
                     $process_opml_outline($opml_xml->body->outline, '', $xml_data, $existing_urls);
                     $xml_data->asXML($userFile);
-                    header('Location: nisaba.php');
+                    header('Location: nisaba.php?view=sources');
                     exit;
                 }
                 else {
@@ -1135,7 +1217,7 @@ if (isset($_SESSION['username'])) {
                     $new_feed->addAttribute('favicon', $favicon_path);
                     $new_feed->addAttribute('lang', $feed_lang);
                     $xml_data->asXML($userFile);
-                    header('Location: nisaba.php');
+                    header('Location: nisaba.php?view=sources');
                     exit;
                 }
             }
@@ -1150,7 +1232,7 @@ if (isset($_SESSION['username'])) {
                 if ($parent->getName() === 'folder' && $parent->count() == 0) unset($parent[0]);
             }
             $xml_data->asXML($userFile);
-            header('Location: nisaba.php');
+            header('Location: nisaba.php?view=sources');
             exit;
         }
 
@@ -1448,10 +1530,19 @@ if (isset($_SESSION['username'])) {
                 <div class="col-12 col-lg-auto">
                     <aside class="sidebar h-100">
                         <div class="logo text-center mb-4"><img src="nisaba.png" alt="Logo Nisaba"></div>
-                        <div class="d-grid gap-2 mb-4">
-                            <a href="?update_cache=1" class="btn btn-primary" style="background-color: darkblue; border-color: darkblue;">Actualizar Feeds</a>
-                            <a href="?view=nisaba_summary" class="btn btn-secondary" style="background-color: #1b8eed; border-color: #1b8eed;">Análisis</a>
-                            <a href="#" id="translate-help-button" class="btn btn-info" style="background-color: skyblue; border-color: skyblue;">Traducir</a>
+                        <div class="row g-2 mb-4">
+                            <div class="col-6 d-grid">
+                                <a href="?update_cache=1" class="btn btn-primary" style="background-color: darkblue; border-color: darkblue;">Actualizar Feeds</a>
+                            </div>
+                            <div class="col-6 d-grid">
+                                <a href="?view=nisaba_summary" class="btn btn-secondary" style="background-color: #1b8eed; border-color: #1b8eed;">Análisis</a>
+                            </div>
+                            <div class="col-6 d-grid">
+                                <a href="#" id="translate-help-button" class="btn btn-info" style="background-color: skyblue; border-color: skyblue;">Traducir</a>
+                            </div>
+                            <div class="col-6 d-grid">
+                                <a href="#" class="btn" style="background-color: #00FFFF; border-color: #00FFFF;">Buscar</a>
+                            </div>
                         </div>
 <?php
 $own_notes_sidebar = [];
@@ -1737,6 +1828,7 @@ $current_feed = $_GET['feed'] ?? '';
                                             if (!empty($current_update_id)) {
                                                 $new_summary->addAttribute('update_id', $current_update_id);
                                             }
+                                            $new_summary->addAttribute('date', date('c'));
                                             $xml_data->asXML($userFile);
                                         }
                                         usleep(1600000); // Pausa de 1.6 segundos (1600 ms) para no saturar la API
@@ -1783,6 +1875,7 @@ $current_feed = $_GET['feed'] ?? '';
                             }
                         }
                     }
+                    generate_analysis_rss($xml_data, $username);
                     if (!$has_any_unread) {
                         echo "<p>¡Estás al día! No hay artículos nuevos que analizar.</p>";
                     }
@@ -1953,7 +2046,7 @@ $current_feed = $_GET['feed'] ?? '';
                                         echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
                                         if (!empty($item->image)) echo '<img src="' . htmlspecialchars($item->image) . '" alt="" class="article-image">';
                                         echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '">' . htmlspecialchars($display_title) . '</a></h3>';
-                                        echo '<p>' . htmlspecialchars(truncate_text($display_desc, 500)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
+                                        echo '<p>' . htmlspecialchars(truncate_text($display_desc ?? '', 500)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
                                         if (!$is_read) {
                                             echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
                                         }
@@ -2023,6 +2116,9 @@ $current_feed = $_GET['feed'] ?? '';
                                     $is_read = (string)$item->read === '1';
                                     if ($is_read && $show_read_articles === 'false') continue;
 
+                                    $feed_url = (string)$item->feed_url;
+                                    $favicon_url = $favicon_map[$feed_url] ?? 'nisaba.png';
+
                                     $raw_title = $item->title_original;
                                     $raw_desc = $item->content_original;
                                     $display_title = normalize_feed_text($raw_title);
@@ -2030,7 +2126,7 @@ $current_feed = $_GET['feed'] ?? '';
                                     echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
                                     if (!empty($item->image)) echo '<img src="' . htmlspecialchars($item->image) . '" alt="" class="article-image">';
                                     echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '&folder=' . urlencode($folder_name) . '">' . htmlspecialchars($display_title) . '</a></h3>';
-                                    echo '<p>' . htmlspecialchars(truncate_text($display_desc, 1250)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
+                                    echo '<p>' . htmlspecialchars(truncate_text($display_desc ?? '', 1250)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
                                     if (!$is_read) {
                                         echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
                                     }
@@ -2081,7 +2177,7 @@ $current_feed = $_GET['feed'] ?? '';
                                     echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
                                     if (!empty($item->image)) echo '<img src="' . htmlspecialchars($item->image) . '" alt="" class="article-image">';
                                     echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '&folder=' . urlencode($_GET['folder'] ?? '') . '">' . htmlspecialchars($display_title) . '</a></h3>';
-                                    echo '<p>' . htmlspecialchars(truncate_text($display_desc, 1250)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
+                                    echo '<p>' . htmlspecialchars(truncate_text($display_desc ?? '', 1250)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
                                     if (!$is_read) {
                                         echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
                                     }
