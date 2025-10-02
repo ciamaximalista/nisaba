@@ -25,12 +25,14 @@ Y recuerda: todo lo que la IA te presentará en sus informes está en las notici
 - **Organización**: Agrupa tus feeds en carpetas temáticas para una mejor organización.
 - **Importación/Exportación OPML**: Migra fácilmente tus suscripciones desde o hacia otros lectores de feeds.
 - **Gestión de Artículos**: Marca artículos como leídos de forma individual o masiva.
+- **Buscador Integrado**: Un potente buscador que te permite encontrar artículos en toda tu caché buscando por palabras clave en títulos y contenido. Los resultados incluyen artículos leídos (marcados visualmente) para que no pierdas ninguna información.
 - **Caché Configurable**: Elige si los artículos leídos se ocultan inmediatamente o si permanecen visibles (en gris) durante 24 o 48 horas antes de ser eliminados de la caché.
 - **Traducción Integrada con el Navegador**: En lugar de usar una API externa, Nisaba le indica a tu navegador el idioma del contenido para que puedas usar su función de traducción nativa, instantánea y gratuita.
 - **Análisis con IA**: Utiliza la API de Google Gemini para generar análisis estratégicos y encontrar elementos  disruptivos y cambios de tendencias en tus artículos no leídos, agrupados por carpeta.
 - **Notas Personales**: Toma notas sobre cualquier artículo o resumen. Tus notas se guardan y son accesibles en cualquier momento.
 - **Recibir Notas**: Puedes suscribirte a las notas de otros usuarios para leer y analizar en equipo.
 - **Feed de Notas**: Todas tus notas están disponibles a través de un feed RSS propio (`notas.xml`), permitiéndote que otros se suscriban a tus ideas y comentarios.
+- **Feed de Análisis**: Todos los informes generados por la IA están disponibles en un nuevo feed RSS (`analisis.xml`). Esto te permite suscribirte a tus propios análisis desde otro lector de feeds o compartir tus hallazgos fácilmente.
 - **Interfaz Sencilla**: Una interfaz de usuario limpia y adaptable, centrada en la legibilidad.
 
 ## Instalación y Configuración
