@@ -1816,22 +1816,46 @@ $current_feed = $_GET['feed'] ?? '';
                                     if ($existing_summary) {
                                         $summary_text = (string)$existing_summary;
                                     } else {
-                                        $summary_text = get_gemini_summary($content_for_folder, $gemini_api_key, $gemini_model, $gemini_prompt);
-                                        if (!str_starts_with($summary_text, 'Error')) {
-                                            $old_summaries = $xml_data->xpath('//summary[@folder="' . htmlspecialchars($folder_name) . '"]');
-                                            foreach ($old_summaries as $old_summary) {
-                                                unset($old_summary[0]);
-                                            }
-                                            if (!isset($xml_data->summaries)) $xml_data->addChild('summaries');
-                                            $new_summary = $xml_data->summaries->addChild('summary', $summary_text);
-                                            $new_summary->addAttribute('folder', $folder_name);
-                                            if (!empty($current_update_id)) {
-                                                $new_summary->addAttribute('update_id', $current_update_id);
-                                            }
-                                            $new_summary->addAttribute('date', date('c'));
-                                            $xml_data->asXML($userFile);
+                                        $unread_count_for_folder = 0;
+                                        $feeds_in_folder = $xml_data->xpath('//folder[@name="' . htmlspecialchars($folder_name) . '"]/feed');
+                                        foreach ($feeds_in_folder as $feed) {
+                                            $feed_url = (string)$feed['url'];
+                                            $unread_articles = $cache_xml->xpath('//item[read="0" and feed_url="' . $feed_url . '"]');
+                                            $unread_count_for_folder += count($unread_articles);
                                         }
-                                        usleep(1600000); // Pausa de 1.6 segundos (1600 ms) para no saturar la API
+
+                                        $latest_summary = null;
+                                        $summaries = $xml_data->xpath('//summary[@folder="' . htmlspecialchars($folder_name) . '"]');
+                                        if (!empty($summaries)) {
+                                            usort($summaries, function($a, $b) { return strtotime((string)$b['date']) - strtotime((string)$a['date']); });
+                                            $latest_summary = $summaries[0];
+                                        }
+
+                                        if ($unread_count_for_folder < 10 && $latest_summary) {
+                                            $summary_text = (string)$latest_summary;
+                                            // Promote the old summary to the current update ID
+                                            if (!empty($current_update_id)) {
+                                                $latest_summary->addAttribute('update_id', $current_update_id);
+                                                $xml_data->asXML($userFile);
+                                            }
+                                        } else {
+                                            $summary_text = get_gemini_summary($content_for_folder, $gemini_api_key, $gemini_model, $gemini_prompt);
+                                            if (!str_starts_with($summary_text, 'Error')) {
+                                                $old_summaries = $xml_data->xpath('//summary[@folder="' . htmlspecialchars($folder_name) . '"]');
+                                                foreach ($old_summaries as $old_summary) {
+                                                    unset($old_summary[0]);
+                                                }
+                                                if (!isset($xml_data->summaries)) $xml_data->addChild('summaries');
+                                                $new_summary = $xml_data->summaries->addChild('summary', $summary_text);
+                                                $new_summary->addAttribute('folder', $folder_name);
+                                                if (!empty($current_update_id)) {
+                                                    $new_summary->addAttribute('update_id', $current_update_id);
+                                                }
+                                                $new_summary->addAttribute('date', date('c'));
+                                                $xml_data->asXML($userFile);
+                                            }
+                                            usleep(1600000); // Pausa de 1.6 segundos (1600 ms) para no saturar la API
+                                        }
                                     }
 
                                     echo '<h3>' . htmlspecialchars($folder_name) . '</h3>';
