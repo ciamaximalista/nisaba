@@ -363,6 +363,28 @@ function truncate_text($text, $char_limit) {
     return mb_strimwidth($trimmed_text, 0, $char_limit, '...', 'UTF-8');
 }
 
+function truncate_by_words($text, $word_limit = 80) {
+    if (!is_string($text) || trim($text) === '') {
+        return '';
+    }
+
+    $text = preg_replace('/\s+/', ' ', trim($text));
+    $words = explode(' ', $text);
+
+    if (count($words) <= $word_limit) {
+        return $text;
+    }
+
+    $truncated_words = array_slice($words, 0, $word_limit);
+    $truncated_text = implode(' ', $truncated_words);
+
+    if (substr(trim($truncated_text), -1) !== '.') {
+        return $truncated_text . '...';
+    }
+
+    return $truncated_text;
+}
+
 function normalize_feed_text($text) {
     if ($text === null) return '';
     if ($text instanceof SimpleXMLElement) {
@@ -2070,7 +2092,7 @@ $current_feed = $_GET['feed'] ?? '';
                                         echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
                                         if (!empty($item->image)) echo '<img src="' . htmlspecialchars($item->image) . '" alt="" class="article-image">';
                                         echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '">' . htmlspecialchars($display_title) . '</a></h3>';
-                                        echo '<p>' . htmlspecialchars(truncate_text($display_desc ?? '', 500)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
+                                        echo '<p>' . htmlspecialchars(truncate_by_words($display_desc ?? '', 80)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
                                         if (!$is_read) {
                                             echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
                                         }
@@ -2150,7 +2172,7 @@ $current_feed = $_GET['feed'] ?? '';
                                     echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
                                     if (!empty($item->image)) echo '<img src="' . htmlspecialchars($item->image) . '" alt="" class="article-image">';
                                     echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '&folder=' . urlencode($folder_name) . '">' . htmlspecialchars($display_title) . '</a></h3>';
-                                    echo '<p>' . htmlspecialchars(truncate_text($display_desc ?? '', 1250)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
+                                    echo '<p>' . htmlspecialchars(truncate_by_words($display_desc ?? '', 80)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
                                     if (!$is_read) {
                                         echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
                                     }
@@ -2201,7 +2223,7 @@ $current_feed = $_GET['feed'] ?? '';
                                     echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
                                     if (!empty($item->image)) echo '<img src="' . htmlspecialchars($item->image) . '" alt="" class="article-image">';
                                     echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '&folder=' . urlencode($_GET['folder'] ?? '') . '">' . htmlspecialchars($display_title) . '</a></h3>';
-                                    echo '<p>' . htmlspecialchars(truncate_text($display_desc ?? '', 1250)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
+                                    echo '<p>' . htmlspecialchars(truncate_by_words($display_desc ?? '', 80)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
                                     if (!$is_read) {
                                         echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
                                     }
@@ -2326,10 +2348,10 @@ $current_feed = $_GET['feed'] ?? '';
                             <p style="font-size: 0.8em; color: #555;">Este nombre se mostrará en tu feed de notas públicas (notas.xml).</p>
                         </div>
                         <div class="form-group">
-                            <label for="user_favicon">Tu favicon (opcional)</label>
+                            <label for="user_favicon">Tu avatar (opcional)</label>
                             <input type="file" id="user_favicon" name="user_favicon" class="form-group input" accept="image/png,image/jpeg,image/gif,image/x-icon,image/svg+xml,image/webp">
                             <?php if (isset($xml_data->settings->user_favicon) && !empty((string)$xml_data->settings->user_favicon)): ?>
-                                <p style="font-size: 0.8em; color: #555;">Favicon actual: <img src="<?php echo htmlspecialchars((string)$xml_data->settings->user_favicon); ?>" style="width: 24px; height: 24px; vertical-align: middle; border-radius: 4px;"></p>
+                                <p style="font-size: 0.8em; color: #555;">Avatar actual: <img src="<?php echo htmlspecialchars((string)$xml_data->settings->user_favicon); ?>" style="width: 24px; height: 24px; vertical-align: middle; border-radius: 4px;"></p>
                             <?php endif; ?>
                             <p style="font-size: 0.8em; color: #555;">Sube una imagen cuadrada (máx 512x512, 1MB). Se mostrará en tu feed de notas y cuando otros sigan tus notas.</p>
                         </div>
@@ -2578,11 +2600,11 @@ $current_feed = $_GET['feed'] ?? '';
                                 <input type="text" name="external_name" id="edit-external-name" class="form-control" required>
                             </div>
                             <div class="form-group">
-                                <label>Favicon Actual</label>
+                                <label>Avatar Actual</label>
                                 <img id="edit-external-current-favicon" src="" style="width: 24px; height: 24px; vertical-align: middle; border-radius: 4px;">
                             </div>
                             <div class="form-group">
-                                <label for="edit-external-favicon-upload">Subir nuevo favicon (opcional)</label>
+                                <label for="edit-external-favicon-upload">Subir nuevo avatar (opcional)</label>
                                 <input type="file" name="new_favicon" id="edit-external-favicon-upload" class="form-control" accept="image/*">
                             </div>
                             <button type="submit" name="edit_external_source" class="btn btn-primary">Guardar</button>

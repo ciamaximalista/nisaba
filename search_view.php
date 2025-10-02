@@ -87,7 +87,7 @@ if (isset($xml_data->feeds)) {
                     
                     <h3><a href="?article_guid=<?php echo urlencode($item->guid); ?>&return_url=<?php echo urlencode($_SERVER['REQUEST_URI']); ?>"><?php echo htmlspecialchars($display_title); ?></a></h3>
                     
-                    <p><?php echo htmlspecialchars(truncate_text($display_desc ?? '', 500)); ?> <img src="<?php echo htmlspecialchars($favicon_url); ?>" style="width: 16px; height: 16px; vertical-align: middle;"></p>
+                    <p><?php echo htmlspecialchars(truncate_by_words($display_desc ?? '', 80)); ?> <img src="<?php echo htmlspecialchars($favicon_url); ?>" style="width: 16px; height: 16px; vertical-align: middle;"></p>
                     
                     <?php if (!$is_read): ?>
                         <div style="clear: both; padding-top: 10px;">
