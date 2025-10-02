@@ -241,42 +241,7 @@ function mask_api_key($key) {
     return substr($key, 0, 4) . str_repeat('x', 20) . substr($key, -4);
 }
 
-function translate_text($text, $target_lang, $api_key) {
-    if (empty($api_key)) return ['success' => false, 'message' => 'API Key de Google Translate no configurada.'];
-    if (empty($text)) return ['success' => true, 'text' => $text];
 
-    $url = 'https://translation.googleapis.com/language/translate/v2?key=' . $api_key;
-    $data = ['q' => $text, 'target' => $target_lang, 'format' => 'html'];
-
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-    
-    $result = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    
-    if ($result === false) {
-        $error_message = curl_error($ch);
-        curl_close($ch);
-        return ['success' => false, 'message' => 'Error de cURL: ' . $error_message];
-    }
-    
-    curl_close($ch);
-
-    $response = json_decode($result, true);
-
-    if (isset($response['error'])) {
-        return ['success' => false, 'message' => 'Error de la API de Google: ' . $response['error']['message']];
-    }
-
-    if (isset($response['data']['translations'][0]['translatedText'])) {
-        return ['success' => true, 'text' => $response['data']['translations'][0]['translatedText']];
-    }
-
-    return ['success' => false, 'message' => 'Respuesta inesperada de la API (HTTP Code: ' . $http_code . ').'];
-}
 
 function get_gemini_summary($content, $api_key, $model, $prompt_template) {
     if (empty($api_key) || empty($content)) return "No hay nada que analizar o la API key de Gemini no está configurada.";
@@ -447,7 +412,7 @@ if (isset($_SESSION['username'])) {
 
     $cacheFile = DATA_DIR . '/' . $username . '_cache.xml';
 
-    $google_api_key = isset($xml_data->settings->google_translate_api_key) ? (string)$xml_data->settings->google_translate_api_key : '';
+
     $gemini_api_key = isset($xml_data->settings->gemini_api_key) ? (string)$xml_data->settings->gemini_api_key : '';
     $gemini_model = isset($xml_data->settings->gemini_model) ? (string)$xml_data->settings->gemini_model : 'gemini-1.5-pro-latest';
     $gemini_prompt = load_prompt_template();
@@ -637,8 +602,6 @@ if (isset($_SESSION['username'])) {
                 $article->addChild('feed_url', $parsed_item['feed_url']);
                 addChildWithCDATA($article, 'title_original', $title);
                 addChildWithCDATA($article, 'content_original', $content);
-                addChildWithCDATA($article, 'title_translated', $title);
-                addChildWithCDATA($article, 'content_translated', $content);
                 $article->addChild('pubDate', $parsed_item['pubDate']);
                 $article->addChild('guid', $parsed_item['guid']);
                 $article->addChild('link', $parsed_item['link']);
@@ -780,69 +743,7 @@ if (isset($_SESSION['username'])) {
         exit;
     }
 
-    if (isset($_GET['action']) && $_GET['action'] === 'translate') {
-        $error_message = '';
-        $success_count = 0;
-        $processed_articles = [];
 
-        if (file_exists($cacheFile)) {
-            $cache_xml = simplexml_load_file($cacheFile);
-            $non_es_feeds = [];
-            foreach ($xml_data->xpath('//feed[not(starts-with(@lang, "es"))]') as $feed) {
-                $non_es_feeds[] = (string)$feed['url'];
-            }
-
-            if (!empty($non_es_feeds)) {
-                $xpath_query = '//item[read="0" and (' . implode(' or ', array_map(function($url) {
-                    return 'feed_url="' . $url . '"';
-                }, $non_es_feeds)) . ')]';
-                
-                $articles_to_translate = $cache_xml->xpath($xpath_query);
-
-                foreach ($articles_to_translate as $article) {
-                    $article_guid = (string)$article->guid;
-                    $translated_something = false;
-
-                    if (empty($error_message) && (string)$article->title_original === (string)$article->title_translated) {
-                        $result = translate_text((string)$article->title_original, 'es', $google_api_key);
-                        if ($result['success']) {
-                            $article->title_translated = html_entity_decode($result['text'], ENT_QUOTES, 'UTF-8');
-                            $translated_something = true;
-                        } else {
-                            $error_message = $result['message'];
-                        }
-                    }
-
-                    if (empty($error_message) && (string)$article->content_original === (string)$article->content_translated) {
-                        $result = translate_text((string)$article->content_original, 'es', $google_api_key);
-                        if ($result['success']) {
-                            $article->content_translated = html_entity_decode($result['text'], ENT_QUOTES, 'UTF-8');
-                            $translated_something = true;
-                        } else {
-                            $error_message = $result['message'];
-                        }
-                    }
-
-                    if ($translated_something && !in_array($article_guid, $processed_articles)) {
-                        $success_count++;
-                        $processed_articles[] = $article_guid;
-                    }
-                }
-                $cache_xml->asXML($cacheFile);
-            }
-        }
-
-        if (!empty($error_message)) {
-            $_SESSION['translate_feedback'] = ['type' => 'error', 'message' => $error_message];
-        } elseif ($success_count > 0) {
-            $_SESSION['translate_feedback'] = ['type' => 'success', 'message' => "Traducción completada para {$success_count} artículos."];
-        } else {
-            $_SESSION['translate_feedback'] = ['type' => 'info', 'message' => 'No había artículos nuevos que traducir.'];
-        }
-
-        header('Location: nisaba.php?view=all_feeds');
-        exit;
-    }
 
     if (isset($_GET['action']) && $_GET['action'] === 'export_opml') {
         if (file_exists($userFile)) {
@@ -998,9 +899,7 @@ if (isset($_SESSION['username'])) {
             if (isset($_POST['gemini_api_key']) && !empty($_POST['gemini_api_key'])) {
                 $xml_data->settings->gemini_api_key = $_POST['gemini_api_key'];
             }
-            if (isset($_POST['google_translate_api_key'])) {
-                $xml_data->settings->google_translate_api_key = $_POST['google_translate_api_key'];
-            }
+
             if (isset($_POST['gemini_model'])) {
                 $xml_data->settings->gemini_model = $_POST['gemini_model'];
             }
@@ -1805,8 +1704,8 @@ $current_feed = $_GET['feed'] ?? '';
                                     $feed_url = (string)$feed['url'];
                                     $unread_articles = $cache_xml->xpath('//item[read="0" and feed_url="' . $feed_url . '"]');
                                     foreach ($unread_articles as $item) {
-                                        $title = !empty($item->title_translated) ? $item->title_translated : $item->title_original;
-                                        $content = !empty($item->content_translated) ? $item->content_translated : $item->content_original;
+                                        $title = $item->title_original;
+                                        $content = $item->content_original;
                                         $content_for_folder .= "Título: " . $title . "\nContenido: " . strip_tags($content) . "\n---\n";
                                     }
                                 }
@@ -1840,6 +1739,7 @@ $current_feed = $_GET['feed'] ?? '';
                                             }
                                             $xml_data->asXML($userFile);
                                         }
+                                        usleep(1600000); // Pausa de 1.6 segundos (1600 ms) para no saturar la API
                                     }
 
                                     echo '<h3>' . htmlspecialchars($folder_name) . '</h3>';
@@ -1941,8 +1841,8 @@ $current_feed = $_GET['feed'] ?? '';
                         </div>
                         <hr>
                         <?php 
-                            $article_title = !empty($article->title_translated) ? $article->title_translated : $article->title_original;
-                            $article_content = !empty($article->content_translated) ? $article->content_translated : $article->content_original;
+                            $article_title = (string)$article->title_original;
+                            $article_content = (string)$article->content_original;
                             $article_image = (string)$article->image;
                             $article_link = (string)$article->link;
                             $archive_today_url = ($archive_integration_enabled && $article_link !== '') ? 'https://archive.today/?run=1&url=' . rawurlencode($article_link) : '';
@@ -2046,8 +1946,8 @@ $current_feed = $_GET['feed'] ?? '';
                                         $feed_url = (string)$item->feed_url;
                                         $favicon_url = $favicon_map[$feed_url] ?? 'nisaba.png';
 
-                                        $raw_title = !empty($item->title_translated) ? $item->title_translated : $item->title_original;
-                                        $raw_desc = !empty($item->content_translated) ? $item->content_translated : $item->content_original;
+                                        $raw_title = $item->title_original;
+                                        $raw_desc = $item->content_original;
                                         $display_title = normalize_feed_text($raw_title);
                                         $display_desc = normalize_feed_text($raw_desc);
                                         echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
@@ -2123,11 +2023,8 @@ $current_feed = $_GET['feed'] ?? '';
                                     $is_read = (string)$item->read === '1';
                                     if ($is_read && $show_read_articles === 'false') continue;
 
-                                    $feed_url = (string)$item->feed_url;
-                                    $favicon_url = $favicon_map[$feed_url] ?? 'nisaba.png';
-
-                                    $raw_title = !empty($item->title_translated) ? $item->title_translated : $item->title_original;
-                                    $raw_desc = !empty($item->content_translated) ? $item->content_translated : $item->content_original;
+                                    $raw_title = $item->title_original;
+                                    $raw_desc = $item->content_original;
                                     $display_title = normalize_feed_text($raw_title);
                                     $display_desc = normalize_feed_text($raw_desc);
                                     echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
@@ -2177,8 +2074,8 @@ $current_feed = $_GET['feed'] ?? '';
                                     $is_read = (string)$item->read === '1';
                                     if ($is_read && $show_read_articles === 'false') continue;
 
-                                    $raw_title = !empty($item->title_translated) ? $item->title_translated : $item->title_original;
-                                    $raw_desc = !empty($item->content_translated) ? $item->content_translated : $item->content_original;
+                                    $raw_title = $item->title_original;
+                                    $raw_desc = $item->content_original;
                                     $display_title = normalize_feed_text($raw_title);
                                     $display_desc = normalize_feed_text($raw_desc);
                                     echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
