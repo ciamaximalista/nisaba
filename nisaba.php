@@ -1541,7 +1541,7 @@ if (isset($_SESSION['username'])) {
                                 <a href="#" id="translate-help-button" class="btn btn-info" style="background-color: skyblue; border-color: skyblue;">Traducir</a>
                             </div>
                             <div class="col-6 d-grid">
-                                <a href="#" class="btn" style="background-color: #00FFFF; border-color: #00FFFF;">Buscar</a>
+                                <a href="?view=search" class="btn" style="background-color: #00FFFF; border-color: #00FFFF;">Buscar</a>
                             </div>
                         </div>
 <?php
@@ -2309,7 +2309,9 @@ $current_feed = $_GET['feed'] ?? '';
                         }
                         ?>
                     </div>
-                <?php elseif ($current_view === 'settings'): ?>
+                <?php elseif ($current_view === 'search'):
+                    require_once __DIR__ . '/search_view.php';
+                elseif ($current_view === 'settings'): ?>
                     <h2>Configuración y Preferencias</h2>
                     <?php 
                         if (isset($_SESSION['settings_feedback'])) {
