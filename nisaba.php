@@ -294,9 +294,19 @@ function generate_analysis_rss($xml_data, $username) {
 
     $channel->addChild('title', 'Análisis de Nisaba para ' . $owner_name);
     $channel->addChild('link', nisaba_public_url('analisis.xml'));
-    $channel->addChild('description', 'Feed con los análisis de prospectiva generados por Nisaba para ' . $owner_name);
+    $channel->addChild('description', 'Feed con los an\xE1lisis de prospectiva generados por Nisaba para ' . $owner_name);
     $channel->addChild('language', 'es-es');
     $channel->addChild('generator', 'Nisaba');
+
+    $user_favicon_path = isset($xml_data->settings->user_favicon) ? trim((string)$xml_data->settings->user_favicon) : '';
+    $user_favicon_url = $user_favicon_path !== '' ? nisaba_public_url($user_favicon_path) : '';
+    if ($user_favicon_url !== '') {
+        $image = $channel->addChild('image');
+        $image->addChild('url', $user_favicon_url);
+        $image->addChild('title', $channel->title);
+        $image->addChild('link', $channel->link);
+        $channel->addChild('owner_favicon', $user_favicon_url);
+    }
 
     if (isset($xml_data->summaries)) {
         $summaries_nodes = $xml_data->summaries->summary;
@@ -771,6 +781,32 @@ if (isset($_SESSION['username'])) {
                     continue;
                 }
                 libxml_clear_errors();
+
+                $has_custom_favicon = false;
+                if (isset($external_source->favicon)) {
+                    $favicon_path = (string)$external_source->favicon;
+                    if (strpos(basename($favicon_path), 'extfav_edited_') === 0) {
+                        $has_custom_favicon = true;
+                    }
+                }
+
+                if (!$has_custom_favicon) {
+                    $external_favicon = '';
+                    if (isset($notes_xml->channel->owner_favicon) && trim((string)$notes_xml->channel->owner_favicon) !== '') {
+                        $external_favicon = trim((string)$notes_xml->channel->owner_favicon);
+                    } elseif (isset($notes_xml->channel->image->url) && trim((string)$notes_xml->channel->image->url) !== '') {
+                        $external_favicon = trim((string)$notes_xml->channel->image->url);
+                    }
+
+                    if (!empty($external_favicon)) {
+                        if (isset($external_source->favicon)) {
+                            $external_source->favicon = $external_favicon;
+                        } else {
+                            $external_source->addChild('favicon', $external_favicon);
+                        }
+                    }
+                }
+
 
                 $note_items = [];
                 if (isset($notes_xml->channel->item)) {
