@@ -1764,9 +1764,14 @@ $current_feed = $_GET['feed'] ?? '';
                                 </div>
 <?php endforeach; ?>
 <?php endif; ?>
+                                <div style="margin-top: 1em;">
+                                    <a href="?view=following_analysis" style="display: block; background-color: #2d2d2d; color: #33ff33; border: 1px solid #444; border-radius: 8px; padding: 0.5em; font-family: 'VT323', monospace; font-size: 18px; text-align: center; text-decoration: none;">
+                                        > Análisis que sigues
+                                    </a>
+                                </div>
                                 <div class="sidebar-utilities">
-                                    <h5>Accesos</h5>
-                                    <a href="?view=sources" class="sidebar-utility-link">Gestión de fuentes</a>
+                                    <h5>Gestión</h5>
+                                    <a href="?view=sources" class="sidebar-utility-link">Fuentes</a>
                                     <a href="?view=settings" class="sidebar-utility-link">Configuración</a>
                                 </div>
                             </div>
@@ -1813,13 +1818,7 @@ $current_feed = $_GET['feed'] ?? '';
                                 </div>
 <?php endif; ?>
 
-                                <div style="margin-top: 1.5rem;">
-                                    <a href="?view=following_analysis" style="text-decoration: none;">
-                                        <div class="summary-box" style="padding: 0.5em; margin-bottom: 0; border: none;">
-                                            <pre class="summary-content" style="text-align: center; padding: 0.5em; margin-bottom: 0; font-size: 18px;">Análisis que sigues</pre>
-                                        </div>
-                                    </a>
-                                </div>
+
                             </div>
                         </div>
                     </aside>
@@ -1922,7 +1921,7 @@ $current_feed = $_GET['feed'] ?? '';
                                     echo '<h3>' . htmlspecialchars($folder_name) . '</h3>';
                                     echo '<div class="summary-container">';
                                     echo '<button class="copy-btn" onclick="copySummary(this)">Copiar</button>';
-                                    echo '<div class="summary-box" style="background-color: #2d2d2d; color: #f1f1f1; border: 1px solid #444; border-radius: 8px; padding: 1.5em; font-family: \'VT323\', monospace; white-space: pre-wrap; overflow-x: auto; margin-top: 0; font-size: 22px;">';
+                                    echo '<div class="summary-box" style="background-color: #2d2d2d; color: #33ff33; border: 1px solid #444; border-radius: 8px; padding: 1.5em; font-family: \'VT323\', monospace; white-space: pre-wrap; overflow-x: auto; margin-top: 0; font-size: 22px;">';
                                     echo format_summary_for_rss($summary_text);
                                     echo '</div>';
 
