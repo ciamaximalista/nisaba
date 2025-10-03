@@ -2666,7 +2666,7 @@ $current_feed = $_GET['feed'] ?? '';
 
         function copySummary(button) {
             const container = button.closest('.summary-container');
-            const summaryText = container.querySelector('.summary-content').innerText;
+            const summaryText = container.querySelector('.summary-box').innerText;
             navigator.clipboard.writeText(summaryText).then(() => {
                 const originalText = button.innerText;
                 button.innerText = '¡Copiado!';

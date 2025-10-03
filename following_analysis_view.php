@@ -63,15 +63,13 @@ if (empty($followed_sources)) {
                         // Correctly access the content:encoded element with namespace
                         $content_encoded = (string)$item->children('http://purl.org/rss/1.0/modules/content/')->encoded;
 
-                        echo '<div class="summary-container" style="margin-top: 1em;">';
                         echo '<h4>' . htmlspecialchars($title) . '</h4>';
+                        echo '<div class="summary-container" style="margin-top: 1em;">';
                         
                         if (trim($content_encoded) !== '') {
-                            echo '<div class="summary-box">';
-                            // Applying styles from .summary-box pre to a div to render HTML
-                            echo '<div style="background-color: #2d2d2d; color: #33ff33; border: 1px solid #444; border-radius: 8px; padding: 1.5em; font-family: \'VT323\', monospace; white-space: pre-wrap; overflow-x: auto; margin-top: 0; font-size: 22px;">';
+                            echo '<button class="copy-btn" onclick="copySummary(this)">Copiar</button>';
+                            echo '<div class="summary-box" style="background-color: #2d2d2d; color: #33ff33; border: 1px solid #444; border-radius: 8px; padding: 1.5em; font-family: \'VT323\', monospace; white-space: pre-wrap; overflow-x: auto; margin-top: 0; font-size: 22px;">';
                             echo $content_encoded; // Echo HTML content directly
-                            echo '</div>';
                             echo '</div>';
                         } else {
                             echo '<p>' . htmlspecialchars((string)$item->description) . '</p>';
