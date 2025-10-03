@@ -239,17 +239,44 @@ function format_summary_for_rss($summary_text) {
     $html = '';
     foreach ($lines as $line) {
         $line = trim($line);
-        if (empty($line)) {
+
+        if ($line === '---') {
+            $html .= "<hr>\n";
             continue;
         }
+        if (empty($line)) continue;
+
         if (str_starts_with($line, '###')) {
-            $html .= '<h3>' . htmlspecialchars(trim(substr($line, 3))) . '</h3>';
+            $level = 3;
+            $content = substr($line, 3);
         } elseif (str_starts_with($line, '##')) {
-            $html .= '<h2>' . htmlspecialchars(trim(substr($line, 2))) . '</h2>';
+            $level = 2;
+            $content = substr($line, 2);
         } elseif (str_starts_with($line, '#')) {
-            $html .= '<h1>' . htmlspecialchars(trim(substr($line, 1))) . '</h1>';
+            $level = 1;
+            $content = substr($line, 1);
         } else {
-            $html .= '<p>' . htmlspecialchars($line) . '</p>';
+            $level = 0;
+            $content = $line;
+        }
+        
+        $content = trim($content);
+
+        // Process bold
+        $parts = preg_split('/(\*\*.*?\*\*)/s', $content, -1, PREG_SPLIT_DELIM_CAPTURE);
+        $processed_content = '';
+        foreach ($parts as $part) {
+            if (str_starts_with($part, '**') && str_ends_with($part, '**')) {
+                $processed_content .= '<strong>' . htmlspecialchars(substr($part, 2, -2)) . '</strong>';
+            } else {
+                $processed_content .= htmlspecialchars($part);
+            }
+        }
+
+        if ($level > 0) {
+            $html .= "<h$level>$processed_content</h$level>\n";
+        } else {
+            $html .= "<p>$processed_content</p>\n";
         }
     }
     return $html;
@@ -1895,18 +1922,9 @@ $current_feed = $_GET['feed'] ?? '';
                                     echo '<h3>' . htmlspecialchars($folder_name) . '</h3>';
                                     echo '<div class="summary-container">';
                                     echo '<button class="copy-btn" onclick="copySummary(this)">Copiar</button>';
-                                    echo '<div class="summary-box"><pre class="summary-content">';
-                                    
-                                    $replacements = [
-                                        "Análisis General del Bloque" => '<span class="summary-h1">Análisis General del Bloque</span>',
-                                        "Señales Débiles y Disrupciones Identificadas" => '<span class="summary-h1">Señales Débiles y Disrupciones Identificadas</span>',
-                                        "Síntesis de Impacto" => '<span class="summary-h2">Síntesis de Impacto</span>'
-                                    ];
-                                    $styled_summary = str_replace(array_keys($replacements), array_values($replacements), $summary_text);
-
-                                    echo $styled_summary;
-
-                                    echo '</pre></div></div>';
+                                    echo '<div class="summary-box" style="background-color: #2d2d2d; color: #f1f1f1; border: 1px solid #444; border-radius: 8px; padding: 1.5em; font-family: \'VT323\', monospace; white-space: pre-wrap; overflow-x: auto; margin-top: 0; font-size: 22px;">';
+                                    echo format_summary_for_rss($summary_text);
+                                    echo '</div>';
 
                                     $note_guid = 'summary_' . md5($folder_name . $current_update_id);
                                     $note_title = "Análisis de la carpeta: " . htmlspecialchars($folder_name);
