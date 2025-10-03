@@ -1865,7 +1865,11 @@ $current_feed = $_GET['feed'] ?? '';
                                             $summary_text = (string)$latest_summary;
                                             // Promote the old summary to the current update ID
                                             if (!empty($current_update_id)) {
-                                                $latest_summary->addAttribute('update_id', $current_update_id);
+                                                if (isset($latest_summary['update_id'])) {
+                                                    $latest_summary['update_id'] = $current_update_id;
+                                                } else {
+                                                    $latest_summary->addAttribute('update_id', $current_update_id);
+                                                }
                                                 $xml_data->asXML($userFile);
                                             }
                                         } else {
