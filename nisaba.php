@@ -301,7 +301,7 @@ function generate_analysis_rss($xml_data, $username) {
 
             $formatted_content = format_summary_for_rss((string)$summary);
             
-            $content_node = $item->addChild('content:encoded');
+            $content_node = $item->addChild('encoded', '', 'http://purl.org/rss/1.0/modules/content/');
             $content_node_dom = dom_import_simplexml($content_node);
             $content_node_dom->appendChild($content_node_dom->ownerDocument->createCDATASection($formatted_content));
 
@@ -1785,6 +1785,14 @@ $current_feed = $_GET['feed'] ?? '';
 <?php endforeach; ?>
                                 </div>
 <?php endif; ?>
+
+                                <div style="margin-top: 1.5rem;">
+                                    <a href="?view=following_analysis" style="text-decoration: none;">
+                                        <div class="summary-box" style="padding: 0.5em; margin-bottom: 0; border: none;">
+                                            <pre class="summary-content" style="text-align: center; padding: 0.5em; margin-bottom: 0; font-size: 18px;">Análisis que sigues</pre>
+                                        </div>
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </aside>
@@ -2333,6 +2341,8 @@ $current_feed = $_GET['feed'] ?? '';
                     </div>
                 <?php elseif ($current_view === 'search'):
                     require_once __DIR__ . '/search_view.php';
+                elseif ($current_view === 'following_analysis'):
+                    require_once __DIR__ . '/following_analysis_view.php';
                 elseif ($current_view === 'settings'): ?>
                     <h2>Configuración y Preferencias</h2>
                     <?php 
