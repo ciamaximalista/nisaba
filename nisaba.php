@@ -1392,13 +1392,11 @@ if (isset($_SESSION['username'])) {
             $original_url = $_POST['original_url'];
             $new_name = trim($_POST['feed_name']);
             $new_folder_name = trim($_POST['folder_name']);
-            $new_lang = trim($_POST['feed_lang']);
             if(empty($new_folder_name)) $new_folder_name = 'General';
             $feeds = $xml_data->xpath('//feed[@url="' . htmlspecialchars($original_url) . '"]');
             if (!empty($feeds)) {
                 $feed_node = $feeds[0];
                 $feed_node['name'] = $new_name;
-                $feed_node['lang'] = $new_lang;
 
                 if (isset($_FILES['new_favicon']) && $_FILES['new_favicon']['error'] === UPLOAD_ERR_OK) {
                     $file = $_FILES['new_favicon'];
@@ -2116,6 +2114,9 @@ $current_feed = $_GET['feed'] ?? '';
                             $article_content = (string)$article->content_original;
                             $article_image = (string)$article->image;
                             $article_link = (string)$article->link;
+                            if (empty($article_link) && filter_var($article_guid, FILTER_VALIDATE_URL)) {
+                                $article_link = $article_guid;
+                            }
                             $archive_today_url = ($archive_integration_enabled && $article_link !== '') ? 'https://archive.today/?run=1&url=' . rawurlencode($article_link) : '';
                         ?>
                         <h2><?php echo htmlspecialchars($article_title); ?> <img src="<?php echo htmlspecialchars($favicon_url); ?>" alt="" style="width: 32px; height: 32px; vertical-align: middle; margin-left: 10px; border-radius: 4px;"></h2>
@@ -2753,10 +2754,6 @@ $current_feed = $_GET['feed'] ?? '';
                                 <label for="edit-folder-name">Carpeta</label>
                                 <input type="text" name="folder_name" id="edit-folder-name" class="form-group input" required>
                             </div>
-                            <div class="form-group">
-                                <label for="edit-feed-lang">Idioma</label>
-                                <input type="text" name="feed_lang" id="edit-feed-lang" class="form-group input" placeholder="ej: es, en, fr">
-                            </div>
                             <button type="submit" name="edit_feed" class="btn btn-primary">Guardar</button>
                         </form>
                     </div>
@@ -2872,13 +2869,11 @@ $current_feed = $_GET['feed'] ?? '';
             const feed_name = li.querySelector('input[name="feed_name"]').value;
             const feed_favicon = li.querySelector('input[name="feed_favicon"]').value;
             const folder_name = li.querySelector('input[name="folder_name"]').value;
-            const feed_lang = li.querySelector('input[name="feed_lang"]').value;
 
             document.getElementById('edit-original-url').value = original_url;
             document.getElementById('edit-feed-name').value = feed_name;
             document.getElementById('edit-current-favicon').src = feed_favicon;
             document.getElementById('edit-folder-name').value = folder_name;
-            document.getElementById('edit-feed-lang').value = feed_lang;
 
             document.getElementById('edit-feed-modal').style.display = 'block';
         }

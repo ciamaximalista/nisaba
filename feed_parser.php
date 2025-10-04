@@ -136,24 +136,39 @@ function parse_feed_items(SimpleXMLElement $source_xml, string $feed_url, array 
 
 function resolve_item_link(SimpleXMLElement $item, bool $is_atom): string
 {
+    // 1. Atom link resolving
     if ($is_atom) {
         foreach ($item->link as $link) {
-            $rel = isset($link['rel']) ? (string)$link['rel'] : '';
+            $attrs = $link->attributes();
+            $rel = isset($attrs['rel']) ? strtolower((string)$attrs['rel']) : '';
             if ($rel === 'alternate' || $rel === '') {
-                return (string)$link['href'];
+                $href = trim((string)$attrs['href']);
+                if ($href !== '') return $href;
             }
         }
-        if (isset($item->link['href'])) {
-            return (string)$item->link['href'];
+        if (isset($item->link) && isset($item->link['href'])) {
+             $href = trim((string)$item->link['href']);
+             if ($href !== '') return $href;
         }
     }
 
-    $link_nodes = $item->xpath('link');
-    if ($link_nodes && !empty($link_nodes)) {
-        return (string)$link_nodes[0];
+    // 2. RSS link resolving
+    if (isset($item->link)) {
+        $link_url = trim((string)$item->link);
+        if ($link_url !== '') {
+            return $link_url;
+        }
     }
 
-    return (string)$item->link;
+    // 3. GUID fallback
+    if (isset($item->guid)) {
+        $guid_url = trim((string)$item->guid);
+        if (filter_var($guid_url, FILTER_VALIDATE_URL)) {
+            return $guid_url;
+        }
+    }
+
+    return '';
 }
 
 function build_item_guid(SimpleXMLElement $item, bool $is_atom, string $link): string
