@@ -30,6 +30,7 @@ Y recuerda: todo lo que la IA te presentará en sus informes está en las notici
 - **Traducción Integrada con el Navegador**: En lugar de usar una API externa, Nisaba le indica a tu navegador el idioma del contenido para que puedas usar su función de traducción nativa, instantánea y gratuita.
 - **Análisis con IA**: Utiliza la API de Google Gemini para generar análisis estratégicos y encontrar elementos  disruptivos y cambios de tendencias en tus artículos no leídos, agrupados por carpeta.
 - **Notas Personales**: Toma notas sobre cualquier artículo o resumen. Tus notas se guardan y son accesibles en cualquier momento.
+- **Enviar tus notas a Telegram**: Puedes compartir tus notas y los enlaces que comentan en un grupo o canal de Telegram con tan sólo pulsar un botón.
 - **Recibir Notas**: Puedes suscribirte a las notas de otros usuarios para leer y analizar en equipo.
 - **Feed de Notas**: Todas tus notas están disponibles a través de un feed RSS propio (`notas.xml`), permitiéndote que otros se suscriban a tus ideas y comentarios.
 - **Feed de Análisis**: Todos los informes generados por la IA están disponibles en un nuevo feed RSS (`analisis.xml`). Esto te permite suscribirte a tus propios análisis desde otro lector de feeds o compartir tus hallazgos fácilmente.
@@ -114,6 +115,7 @@ Esta API te permite usar la función "Análisis" para obtener resúmenes estrat�
 - **Gestionar Fuentes**: Añade nuevas fuentes RSS o importa un archivo OPML desde la sección "Gestionar Fuentes". Aquí también puedes editar el nombre, la carpeta y el idioma de cada feed.
 - **Actualizar Feeds**: Haz clic en "Actualizar Feeds" para descargar los últimos artículos de todas tus suscripciones.
 - **Analizar**: Usa el botón "Análisis" para procesar los artículos descargados y obtener resúmenes estratégicos.
+- **Compartir**: Comparte tus análisis y notas mediante RSS y convierte tus notas en mensajes de Telegram con tan solo pulsar un botón.
 
 
 ## Licencia
