@@ -360,6 +360,38 @@ function mask_api_key($key) {
     return substr($key, 0, 4) . str_repeat('x', 20) . substr($key, -4);
 }
 
+function send_telegram_message($bot_token, $chat_id, $text) {
+    if (empty($bot_token) || empty($chat_id)) {
+        return ['ok' => false, 'message' => 'El token del bot de Telegram o el ID del chat no están configurados.'];
+    }
+
+    $url = 'https://api.telegram.org/bot' . $bot_token . '/sendMessage';
+    $data = [
+        'chat_id' => $chat_id,
+        'text' => $text,
+        'parse_mode' => 'HTML'
+    ];
+
+    $options = [
+        'http' => [
+            'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
+            'method'  => 'POST',
+            'content' => http_build_query($data),
+            'ignore_errors' => true
+        ]
+    ];
+
+    $context  = stream_context_create($options);
+    $result = file_get_contents($url, false, $context);
+    $response = json_decode($result, true);
+
+    if (!$response || !$response['ok']) {
+        return ['ok' => false, 'message' => 'Error al enviar el mensaje a Telegram: ' . ($response['description'] ?? 'Respuesta inválida')];
+    }
+
+    return ['ok' => true, 'message' => 'Mensaje enviado a Telegram con éxito.'];
+}
+
 
 
 function get_gemini_summary($content, $api_key, $model, $prompt_template) {
@@ -557,6 +589,8 @@ if (isset($_SESSION['username'])) {
     $gemini_api_key = isset($xml_data->settings->gemini_api_key) ? (string)$xml_data->settings->gemini_api_key : '';
     $gemini_model = isset($xml_data->settings->gemini_model) ? (string)$xml_data->settings->gemini_model : 'gemini-1.5-pro-latest';
     $gemini_prompt = load_prompt_template();
+    $telegram_bot_token = isset($xml_data->settings->telegram_bot_token) ? (string)$xml_data->settings->telegram_bot_token : '';
+    $telegram_chat_id = isset($xml_data->settings->telegram_chat_id) ? (string)$xml_data->settings->telegram_chat_id : '';
     $cache_duration = sanitize_cache_duration(isset($xml_data->settings->cache_duration) ? (string)$xml_data->settings->cache_duration : (string)DEFAULT_CACHE_DURATION_HOURS);
     $show_read_articles = isset($xml_data->settings->show_read_articles) ? (string)$xml_data->settings->show_read_articles : 'true';
     $archive_integration_enabled = isset($xml_data->settings->archive_integration) && (string)$xml_data->settings->archive_integration === 'true';
@@ -1037,6 +1071,33 @@ if (isset($_SESSION['username'])) {
             exit;
         }
 
+        if (isset($_POST['send_to_telegram'])) {
+            $guid = $_POST['send_to_telegram'];
+            $note_to_send = $xml_data->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
+            
+            if (!empty($note_to_send)) {
+                $telegram_bot_token = isset($xml_data->settings->telegram_bot_token) ? (string)$xml_data->settings->telegram_bot_token : '';
+                $telegram_chat_id = isset($xml_data->settings->telegram_chat_id) ? (string)$xml_data->settings->telegram_chat_id : '';
+
+                $note_title = (string)$note_to_send[0]->article_title;
+                $note_content = (string)$note_to_send[0]->content;
+                $note_link = (string)$note_to_send[0]->article_link;
+
+                $text = "<b>" . htmlspecialchars($note_title) . "</b>\n\n";
+                $text .= htmlspecialchars($note_content) . "\n\n";
+                $text .= "<a href=\"" . htmlspecialchars($note_link) . "\">Ver artículo original</a>";
+
+                $result = send_telegram_message($telegram_bot_token, $telegram_chat_id, $text);
+
+                $_SESSION['notes_feedback'] = ['type' => $result['ok'] ? 'success' : 'error', 'message' => $result['message']];
+            } else {
+                $_SESSION['notes_feedback'] = ['type' => 'error', 'message' => 'No se encontró la nota para enviar.'];
+            }
+            
+            header('Location: nisaba.php?view=notes');
+            exit;
+        }
+
         if (isset($_POST['save_settings'])) {
             if (!isset($xml_data->settings)) {
                 $xml_data->addChild('settings');
@@ -1069,6 +1130,12 @@ if (isset($_SESSION['username'])) {
 
             if (isset($_POST['gemini_model'])) {
                 $xml_data->settings->gemini_model = $_POST['gemini_model'];
+            }
+            if (isset($_POST['telegram_bot_token']) && !empty($_POST['telegram_bot_token'])) {
+                $xml_data->settings->telegram_bot_token = $_POST['telegram_bot_token'];
+            }
+            if (isset($_POST['telegram_chat_id'])) {
+                $xml_data->settings->telegram_chat_id = $_POST['telegram_chat_id'];
             }
             if (isset($_POST['cache_duration'])) {
                 $xml_data->settings->cache_duration = $_POST['cache_duration'];
@@ -2352,6 +2419,14 @@ $current_feed = $_GET['feed'] ?? '';
                     </div>
                 <?php elseif ($current_view === 'notes'): ?>
                     <h2>Notas</h2>
+                    <?php 
+                        if (isset($_SESSION['notes_feedback'])) {
+                            $feedback = $_SESSION['notes_feedback'];
+                            $color = $feedback['type'] === 'error' ? 'var(--danger-color)' : 'green';
+                            echo '<p style="color: ' . $color . '; border: 1px solid ' . $color . '; padding: 1em; border-radius: 4px;">' . htmlspecialchars($feedback['message']) . '</p>';
+                            unset($_SESSION['notes_feedback']);
+                        }
+                    ?>
                     <div class="notes-container">
                         <?php
                         if (isset($xml_data->notes)) {
@@ -2373,14 +2448,16 @@ $current_feed = $_GET['feed'] ?? '';
                                 echo '<div class="note-display">';
                                 echo '<h4><a href="' . htmlspecialchars($note->article_link) . '" target="_blank">' . htmlspecialchars($note->article_title) . '</a></h4>';
                                 echo '<p>' . nl2br(htmlspecialchars($note->content)) . '</p>';
-                                echo '<div style="display: flex; gap: 10px; margin-top: 1em;">';
-                                echo '<button class="btn btn-outline-secondary btn-sm" onclick="toggleNoteEdit(this)">Editar</button>';
-                                echo '<form method="POST" action="nisaba.php?view=notes" onsubmit="return confirm(\'¿Seguro que quieres eliminar esta nota?\');">';
-                                echo '<input type="hidden" name="delete_note" value="' . htmlspecialchars($note->article_guid) . '">';
-                                echo '<button type="submit" class="btn btn-danger">Eliminar</button>';
-                                echo '</form></div></div>';
-
-                                echo '<form method="POST" action="nisaba.php?view=notes" class="note-edit-form" style="display:none;">';
+                                                echo '<div style="display: flex; gap: 10px; margin-top: 1em;">';
+                                                echo '<button class="btn btn-outline-secondary btn-sm" onclick="toggleNoteEdit(this)">Editar</button>';
+                                                echo '<form method="POST" action="nisaba.php?view=notes" onsubmit="return confirm(\'¿Seguro que quieres eliminar esta nota?\');">';
+                                                echo '<input type="hidden" name="delete_note" value="' . htmlspecialchars($note->article_guid) . '">';
+                                                echo '<button type="submit" class="btn btn-danger">Eliminar</button>';
+                                                echo '</form>';
+                                                                echo '<form method="POST" action="nisaba.php?view=notes">';
+                                                                echo '<input type="hidden" name="send_to_telegram" value="' . htmlspecialchars($note->article_guid) . '">';
+                                                                echo '<button type="submit" class="btn btn-primary">Enviar a Telegram</button>';
+                                                                echo '</form></div></div>';                                echo '<form method="POST" action="nisaba.php?view=notes" class="note-edit-form" style="display:none;">';
                                 echo '<input type="hidden" name="article_guid" value="' . htmlspecialchars($note->article_guid) . '">';
                                 echo '<div class="form-group"><label>Título</label><input type="text" name="article_title" value="' . htmlspecialchars($note->article_title) . '" class="form-group input"></div>';
                                 echo '<div class="form-group"><label>Contenido</label><textarea name="note_content" class="postit-textarea">' . htmlspecialchars($note->content) . '</textarea></div>';
@@ -2454,6 +2531,21 @@ $current_feed = $_GET['feed'] ?? '';
                                     }
                                 ?>
                             </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="telegram_bot_token">Token del Bot de Telegram (opcional)</label>
+                            <input type="password" id="telegram_bot_token" name="telegram_bot_token" placeholder="************" class="form-group input">
+                            <?php if (isset($xml_data->settings->telegram_bot_token) && !empty((string)$xml_data->settings->telegram_bot_token)): ?>
+                                <p style="font-size: 0.8em; color: #555;">Token guardado: <?php echo mask_api_key((string)$xml_data->settings->telegram_bot_token); ?></p>
+                            <?php endif; ?>
+                            <p style="font-size: 0.8em; color: #555;">Introduce el token de tu bot de Telegram para poder enviar tus notas como mensajes a un canal o grupo.</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="telegram_chat_id">ID del Canal o Grupo de Telegram (opcional)</label>
+                            <input type="text" id="telegram_chat_id" name="telegram_chat_id" value="<?php echo isset($xml_data->settings->telegram_chat_id) ? htmlspecialchars((string)$xml_data->settings->telegram_chat_id) : ''; ?>" class="form-group input">
+                            <p style="font-size: 0.8em; color: #555;">Introduce el ID del chat de Telegram (canal o grupo) donde se enviarán las notas. Para un canal puede ser "@nombrecanal" y para un grupo un ID numérico.</p>
                         </div>
 
                         <hr>
