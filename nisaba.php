@@ -2389,7 +2389,6 @@ $current_feed = $_GET['feed'] ?? '';
                                 $title = normalize_feed_text($note_entry->title ?? '');
                                 if ($title === '') $title = 'Nota recibida';
                                 $content_text = normalize_feed_text($note_entry->content ?? '');
-                                $content_text = $content_text !== '' ? truncate_text($content_text, 400) : 'Sin contenido';
                                 $source_name = normalize_feed_text($note_entry->source_name ?? '');
                                 $source_url = (string)($note_entry->source_url ?? '');
                                 $favicon = (string)($note_entry->favicon ?? '');
@@ -2410,6 +2409,20 @@ $current_feed = $_GET['feed'] ?? '';
                                     echo '</small></p>';
                                 }
                                 echo '<p>' . nl2br(htmlspecialchars($content_text)) . '</p>';
+
+                                // Form to import the note
+                                $full_content_for_import = normalize_feed_text($note_entry->content ?? '');
+                                $import_content = $full_content_for_import . "\n\n" . 'Compartido por ' . $source_name;
+                                echo '<form method="POST" action="nisaba.php" style="margin-top: 10px;">';
+                                echo '<input type="hidden" name="save_note" value="true">';
+                                echo '<input type="hidden" name="article_guid" value="' . uniqid('note_') . '">';
+                                echo '<input type="hidden" name="article_title" value="' . htmlspecialchars($title) . '">';
+                                echo '<input type="hidden" name="article_link" value="' . htmlspecialchars($link) . '">';
+                                echo '<input type="hidden" name="note_content" value="' . htmlspecialchars($import_content) . '">';
+                                echo '<input type="hidden" name="return_url" value="nisaba.php?view=received_notes">';
+                                echo '<button type="submit" class="btn btn-sm btn-primary">Importar</button>';
+                                echo '</form>';
+
                                 echo '</div>';
                                 echo '</div>';
                                 $i++;
