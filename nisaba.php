@@ -587,65 +587,6 @@ if (isset($_SESSION['username'])) {
     $notesFile = DATA_DIR . '/' . $username . '_notes.xml';
     $summariesFile = DATA_DIR . '/' . $username . '_summaries.xml';
     $receivedNotesFile = DATA_DIR . '/' . $username . '_received_notes.xml';
-
-    // Lógica de migración única
-    if (file_exists($userFile) && !file_exists($feedsFile)) {
-        $old_xml = simplexml_load_file($userFile);
-
-        // Helper function to safely copy nodes
-        $copy_nodes = function($source_node, $target_xml) {
-            // Check if the source node is a valid SimpleXMLElement with a name.
-            if ($source_node && $source_node->getName()) {
-                $dom_target = dom_import_simplexml($target_xml);
-                $dom_source = dom_import_simplexml($source_node);
-                if ($dom_source) {
-                    foreach ($dom_source->childNodes as $child_node) {
-                        $imported_node = $dom_target->ownerDocument->importNode($child_node, true);
-                        $dom_target->appendChild($imported_node);
-                    }
-                }
-            }
-        };
-
-        // 1. Copy data to new, separate files
-        $xml_feeds = new SimpleXMLElement('<feeds/>');
-        $copy_nodes($old_xml->feeds, $xml_feeds);
-        $xml_feeds->asXML($feedsFile);
-
-        $xml_notes = new SimpleXMLElement('<notes/>');
-        $copy_nodes($old_xml->notes, $xml_notes);
-        $xml_notes->asXML($notesFile);
-
-        $xml_summaries = new SimpleXMLElement('<summaries/>');
-        $copy_nodes($old_xml->summaries, $xml_summaries);
-        $xml_summaries->asXML($summariesFile);
-
-        $xml_received_notes = new SimpleXMLElement('<received_notes/>');
-        $copy_nodes($old_xml->received_notes_cache, $xml_received_notes);
-        $xml_received_notes->asXML($receivedNotesFile);
-
-        // 2. Create a new, clean user file with only the essential nodes
-        $new_user_xml = new SimpleXMLElement('<user/>');
-        if (isset($old_xml->password)) {
-            $new_user_xml->addChild('password', (string)$old_xml->password);
-        }
-        if (isset($old_xml->settings)) {
-            $settings_node = $new_user_xml->addChild('settings');
-            $copy_nodes($old_xml->settings, $settings_node);
-        }
-        if (isset($old_xml->read_guids)) {
-            $guids_node = $new_user_xml->addChild('read_guids');
-            $copy_nodes($old_xml->read_guids, $guids_node);
-        }
-        if (isset($old_xml->external_notes_sources)) {
-            $external_notes_node = $new_user_xml->addChild('external_notes_sources');
-            $copy_nodes($old_xml->external_notes_sources, $external_notes_node);
-        }
-
-        // 3. Overwrite the old user file with the clean version
-        $new_user_xml->asXML($userFile);
-    }
-
     // Carga de datos
     $xml_data = simplexml_load_file($userFile);
     if ($xml_data === false) {
