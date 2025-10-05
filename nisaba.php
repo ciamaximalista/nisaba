@@ -2649,7 +2649,7 @@ $current_feed = $_GET['feed'] ?? '';
                             <p class="text-muted" style="font-size: 0.8em;">Para modificar este prompt edita el archivo <code>prompt.txt</code> en el directorio principal de Nisaba.</p>
                         </div>
                 <?php else: ?>
-                    <h2>Gestionar Fuentes</h2>
+<h2>Gestión de Fuentes</h2>
                     <?php if ($feed_error): ?><p class="error"><?php echo $feed_error; ?></p><?php endif; ?>
                     <?php if ($feed_success): ?><p style="color: green; margin-bottom: 1em; font-weight: 600;"><?php echo $feed_success; ?></p><?php endif; ?>
                     <?php if(isset($xml_data->feeds)) { foreach ($xml_data->feeds->folder as $folder): ?>
@@ -2684,34 +2684,44 @@ $current_feed = $_GET['feed'] ?? '';
                         <h3>Añadir/Importar Fuentes</h3>
                         <a href="?action=export_opml">Exportar a OPML</a>
                     </div>
-                    <div style="display: flex; gap: 2em; align-items: flex-start; border: 1px solid var(--border-color); padding: 1.5em; border-radius: 8px;">
-                        <div style="flex: 1;">
-                            <form method="POST" action="nisaba.php">
-                                <h4>Añadir Nueva Fuente</h4>
-                                <div class="form-group">
-                                    <label for="feed_url">URL del Feed RSS</label>
-                                    <input type="url" id="feed_url" name="feed_url" required>
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h3 class="card-title">Añadir o Importar Fuentes</h3>
+                            
+                            <h4 class="mt-4">Añadir un feed</h4>
+                            <form action="nisaba.php?view=sources" method="POST">
+                                <div class="form-group mb-2">
+                                    <label for="feed_url">URL del Feed</label>
+                                    <input type="url" class="form-control" id="feed_url" name="feed_url" required>
                                 </div>
-                                <div class="form-group">
+                                <div class="form-group mb-2">
                                     <label for="folder_name">Carpeta (opcional)</label>
-                                    <input type="text" id="folder_name" name="folder_name" placeholder="General">
+                                    <input type="text" class="form-control" id="folder_name" name="folder_name" placeholder="General">
                                 </div>
-                                <button type="submit" name="add_feed" class="btn btn-primary">Añadir Fuente</button>
+                                <button type="submit" name="add_feed" class="btn btn-primary">Añadir Feed</button>
                             </form>
-                        </div>
-                        <div style="flex: 1; border-left: 1px solid var(--border-color); padding-left: 2em;">
-                            <form method="POST" action="nisaba.php" enctype="multipart/form-data">
-                                <h4>Importar desde OPML</h4>
-                                <div class="form-group">
+
+                            <hr class="my-4">
+
+                            <h4>Importar desde OPML</h4>
+                            <form action="nisaba.php?view=sources" method="POST" enctype="multipart/form-data">
+                                <div class="form-group mb-2">
                                     <label for="opml_file">Archivo OPML</label>
-                                    <input type="file" id="opml_file" name="opml_file" accept=".opml, .xml" required>
+                                    <input type="file" class="form-control" id="opml_file" name="opml_file" accept=".opml, .xml" required>
                                 </div>
-                                <button type="submit" name="import_opml" class="btn btn-outline-secondary">Importar</button>
+                                <button type="submit" name="import_opml" class="btn btn-secondary">Importar</button>
+                                <a href="?action=export_opml" class="btn btn-outline-secondary">Exportar OPML</a>
                             </form>
                         </div>
                     </div>
-                    <hr class="my-4">
-                    <h3>Seguir las notas de otros usuarios</h3>
+
+    <div class="my-4">
+        <?php include __DIR__ . '/feed_crawler_view.php'; ?>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h3 class="card-title">Seguir las notas de otros usuarios de Nisaba</h3>
                     <p class="text-muted">Introduce la URL base del Nisaba que deseas seguir (por ejemplo, <code>https://ejemplo.org/nisaba</code>). Nisaba buscará su feed de notas, obtendrá el nombre y favicon del autor automáticamente y lo añadirá a tus fuentes.</p>
                     <form method="POST" action="nisaba.php?view=sources" class="row g-3 align-items-end mb-4">
                         <div class="col-12 col-lg-8">
