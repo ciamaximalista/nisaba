@@ -40,8 +40,8 @@ usort($search_results, function($a, $b) {
 });
 
 $favicon_map = [];
-if (isset($xml_data->feeds)) {
-    foreach ($xml_data->xpath('//feed') as $feed) {
+if (isset($xml_feeds->folder)) {
+    foreach ($xml_feeds->xpath('//feed') as $feed) {
         $favicon_map[(string)$feed['url']] = (string)$feed['favicon'];
     }
 }
@@ -57,8 +57,8 @@ if ($notes_search_performed) {
 
     if (!empty($keywords)) {
         // Search in own notes
-        if (isset($xml_data->notes)) {
-            foreach ($xml_data->notes->note as $note) {
+        if (isset($xml_notes->note)) {
+            foreach ($xml_notes->note as $note) {
                 $title = (string)$note->article_title;
                 $content = (string)$note->content;
                 $searchable_text = $title . ' ' . $content;
@@ -78,8 +78,8 @@ if ($notes_search_performed) {
         }
 
         // Search in received notes if requested
-        if ($include_received && isset($xml_data->received_notes_cache)) {
-            foreach ($xml_data->received_notes_cache->note as $note) {
+        if ($include_received && isset($xml_received_notes->note)) {
+            foreach ($xml_received_notes->note as $note) {
                 $title = (string)$note->title;
                 $content = (string)$note->content;
                 $searchable_text = $title . ' ' . $content;

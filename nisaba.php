@@ -175,7 +175,7 @@ function nisaba_resolve_url(string $base_url, string $relative_path): string {
     return $scheme . '://' . $host . $port . $normalized_path;
 }
 
-function generate_notes_rss($xml_data, $username) {
+function generate_notes_rss($xml_data, $xml_notes, $username) {
     $rss = new SimpleXMLElement('<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"></rss>');
     $channel = $rss->addChild('channel');
 
@@ -211,8 +211,8 @@ function generate_notes_rss($xml_data, $username) {
         $channel->addChild('owner_favicon', $user_favicon_url);
     }
 
-    if (isset($xml_data->notes)) {
-        $notes_nodes = $xml_data->notes->note;
+    if (isset($xml_notes->note)) {
+        $notes_nodes = $xml_notes->note;
         $notes_array = [];
         foreach ($notes_nodes as $note) {
             $notes_array[] = $note;
@@ -282,7 +282,7 @@ function format_summary_for_rss($summary_text) {
     return $html;
 }
 
-function generate_analysis_rss($xml_data, $username) {
+function generate_analysis_rss($xml_data, $xml_summaries, $username) {
     $rss = new SimpleXMLElement('<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"></rss>');
     $channel = $rss->addChild('channel');
 
@@ -308,8 +308,8 @@ function generate_analysis_rss($xml_data, $username) {
         $channel->addChild('owner_favicon', $user_favicon_url);
     }
 
-    if (isset($xml_data->summaries)) {
-        $summaries_nodes = $xml_data->summaries->summary;
+    if (isset($xml_summaries->summary)) {
+        $summaries_nodes = $xml_summaries->summary;
         $summaries_array = [];
         foreach ($summaries_nodes as $summary) {
             $summaries_array[] = $summary;
@@ -580,7 +580,73 @@ if (isset($_SESSION['username'])) {
     $username = $_SESSION['username'];
 
     libxml_use_internal_errors(true);
+
+    // --- 3.1. CARGA DE DATOS Y MIGRACIÓN ---
     $userFile = DATA_DIR . '/' . $username . '.xml';
+    $feedsFile = DATA_DIR . '/' . $username . '_feeds.xml';
+    $notesFile = DATA_DIR . '/' . $username . '_notes.xml';
+    $summariesFile = DATA_DIR . '/' . $username . '_summaries.xml';
+    $receivedNotesFile = DATA_DIR . '/' . $username . '_received_notes.xml';
+
+    // Lógica de migración única
+    if (file_exists($userFile) && !file_exists($feedsFile)) {
+        $old_xml = simplexml_load_file($userFile);
+
+        // Helper function to safely copy nodes
+        $copy_nodes = function($source_node, $target_xml) {
+            // Check if the source node is a valid SimpleXMLElement with a name.
+            if ($source_node && $source_node->getName()) {
+                $dom_target = dom_import_simplexml($target_xml);
+                $dom_source = dom_import_simplexml($source_node);
+                if ($dom_source) {
+                    foreach ($dom_source->childNodes as $child_node) {
+                        $imported_node = $dom_target->ownerDocument->importNode($child_node, true);
+                        $dom_target->appendChild($imported_node);
+                    }
+                }
+            }
+        };
+
+        // 1. Copy data to new, separate files
+        $xml_feeds = new SimpleXMLElement('<feeds/>');
+        $copy_nodes($old_xml->feeds, $xml_feeds);
+        $xml_feeds->asXML($feedsFile);
+
+        $xml_notes = new SimpleXMLElement('<notes/>');
+        $copy_nodes($old_xml->notes, $xml_notes);
+        $xml_notes->asXML($notesFile);
+
+        $xml_summaries = new SimpleXMLElement('<summaries/>');
+        $copy_nodes($old_xml->summaries, $xml_summaries);
+        $xml_summaries->asXML($summariesFile);
+
+        $xml_received_notes = new SimpleXMLElement('<received_notes/>');
+        $copy_nodes($old_xml->received_notes_cache, $xml_received_notes);
+        $xml_received_notes->asXML($receivedNotesFile);
+
+        // 2. Create a new, clean user file with only the essential nodes
+        $new_user_xml = new SimpleXMLElement('<user/>');
+        if (isset($old_xml->password)) {
+            $new_user_xml->addChild('password', (string)$old_xml->password);
+        }
+        if (isset($old_xml->settings)) {
+            $settings_node = $new_user_xml->addChild('settings');
+            $copy_nodes($old_xml->settings, $settings_node);
+        }
+        if (isset($old_xml->read_guids)) {
+            $guids_node = $new_user_xml->addChild('read_guids');
+            $copy_nodes($old_xml->read_guids, $guids_node);
+        }
+        if (isset($old_xml->external_notes_sources)) {
+            $external_notes_node = $new_user_xml->addChild('external_notes_sources');
+            $copy_nodes($old_xml->external_notes_sources, $external_notes_node);
+        }
+
+        // 3. Overwrite the old user file with the clean version
+        $new_user_xml->asXML($userFile);
+    }
+
+    // Carga de datos
     $xml_data = simplexml_load_file($userFile);
     if ($xml_data === false) {
         $error_messages = [];
@@ -589,6 +655,26 @@ if (isset($_SESSION['username'])) {
         }
         libxml_clear_errors();
         die('ERROR CRÍTICO: No se pudo cargar el archivo de datos del usuario. Detalles: ' . implode('; ', $error_messages) . ' Por favor, comprueba el archivo en la ruta: ' . htmlspecialchars($userFile));
+    }
+
+    $xml_feeds = file_exists($feedsFile) ? @simplexml_load_file($feedsFile) : false;
+    if ($xml_feeds === false) {
+        $xml_feeds = new SimpleXMLElement('<feeds/>');
+    }
+
+    $xml_notes = file_exists($notesFile) ? @simplexml_load_file($notesFile) : false;
+    if ($xml_notes === false) {
+        $xml_notes = new SimpleXMLElement('<notes/>');
+    }
+
+    $xml_summaries = file_exists($summariesFile) ? @simplexml_load_file($summariesFile) : false;
+    if ($xml_summaries === false) {
+        $xml_summaries = new SimpleXMLElement('<summaries/>');
+    }
+
+    $xml_received_notes = file_exists($receivedNotesFile) ? @simplexml_load_file($receivedNotesFile) : false;
+    if ($xml_received_notes === false) {
+        $xml_received_notes = new SimpleXMLElement('<received_notes/>');
     }
 
     $cacheFile = DATA_DIR . '/' . $username . '_cache.xml';
@@ -760,7 +846,7 @@ if (isset($_SESSION['username'])) {
         // 3. Fetch new articles
         $context = stream_context_create(['http' => ['user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36', 'timeout' => 10]]);
         
-        foreach ($xml_data->xpath('//feed') as $feed) {
+        foreach ($xml_feeds->xpath('//feed') as $feed) {
             $feed_url = (string)$feed['url'];
 
             $feed_content = fetch_feed_content($feed_url);
@@ -794,13 +880,7 @@ if (isset($_SESSION['username'])) {
         }
         
         // 3b. Fetch external notes sources
-        if (isset($xml_data->received_notes_cache)) {
-            $existing_received_dom = dom_import_simplexml($xml_data->received_notes_cache);
-            if ($existing_received_dom) {
-                $existing_received_dom->parentNode->removeChild($existing_received_dom);
-            }
-        }
-        $received_notes_cache_node = $xml_data->addChild('received_notes_cache');
+        $xml_received_notes = new SimpleXMLElement('<received_notes/>'); // Clear existing notes
         if (isset($xml_data->external_notes_sources)) {
             foreach ($xml_data->external_notes_sources->source as $external_source) {
                 $source_name = isset($external_source->name) ? (string)$external_source->name : 'Nisaba';
@@ -848,7 +928,6 @@ if (isset($_SESSION['username'])) {
                         }
                     }
                 }
-
 
                 $note_items = [];
                 if (isset($notes_xml->channel->item)) {
@@ -917,7 +996,7 @@ if (isset($_SESSION['username'])) {
                         }
                     }
 
-                    $received_note = $received_notes_cache_node->addChild('note');
+                    $received_note = $xml_received_notes->addChild('note');
                     $received_note->addChild('source_name', $source_name);
                     $received_note->addChild('source_url', $source_url);
                     if (!empty($source_favicon)) {
@@ -930,6 +1009,7 @@ if (isset($_SESSION['username'])) {
                 }
             }
         }
+        $xml_received_notes->asXML($receivedNotesFile);
 
         // 4. Save the modified cache object once
         $cache_xml->asXML($cacheFile);
@@ -955,13 +1035,13 @@ if (isset($_SESSION['username'])) {
 
 
     if (isset($_GET['action']) && $_GET['action'] === 'export_opml') {
-        if (file_exists($userFile)) {
+        if (file_exists($feedsFile)) {
             $opml = new SimpleXMLElement('<opml version="2.0"></opml>');
             $head = $opml->addChild('head');
             $head->addChild('title', 'Suscripciones de Nisaba para ' . $username);
             $body = $opml->addChild('body');
-            if (isset($xml_data->feeds)) {
-                foreach ($xml_data->feeds->folder as $folder) {
+            if (isset($xml_feeds->folder)) {
+                foreach ($xml_feeds->xpath('//folder') as $folder) {
                     $folder_outline = $body->addChild('outline');
                     $folder_outline->addAttribute('text', (string)$folder['name']);
                     $folder_outline->addAttribute('title', (string)$folder['name']);
@@ -987,14 +1067,12 @@ if (isset($_SESSION['username'])) {
                 $opml_content = file_get_contents($_FILES['opml_file']['tmp_name']);
                 $opml_xml = @simplexml_load_string($opml_content);
                 if ($opml_xml && isset($opml_xml->body)) {
-                    if (!isset($xml_data->feeds)) $xml_data->addChild('feeds');
-                    
                     $existing_urls = [];
-                    foreach ($xml_data->xpath('//feed[@url]') as $feed) {
+                    foreach ($xml_feeds->xpath('//feed[@url]') as $feed) {
                         $existing_urls[] = (string)$feed['url'];
                     }
 
-                    $process_opml_outline = function($outline, $current_folder) use (&$process_opml_outline, &$xml_data, &$existing_urls) {
+                    $process_opml_outline = function($outline, $current_folder) use (&$process_opml_outline, &$xml_feeds, &$existing_urls) {
                         foreach ($outline as $entry) {
                             if (isset($entry['xmlUrl'])) {
                                 $feed_url = (string)$entry['xmlUrl'];
@@ -1002,8 +1080,8 @@ if (isset($_SESSION['username'])) {
                                     $feed_title = (string)($entry['text'] ?? $entry['title'] ?? $feed_url);
                                     $favicon_path = get_favicon($feed_url);
                                     $folder_name = $current_folder ?: 'General';
-                                    $folder = $xml_data->xpath('//folder[@name="' . htmlspecialchars($folder_name) . '"]');
-                                    $folder_node = !empty($folder) ? $folder[0] : $xml_data->feeds->addChild('folder');
+                                    $folder = $xml_feeds->xpath('//folder[@name="' . htmlspecialchars($folder_name) . '"]');
+                                    $folder_node = !empty($folder) ? $folder[0] : $xml_feeds->addChild('folder');
                                     if (empty($folder)) $folder_node->addAttribute('name', $folder_name);
                                     $new_feed = $folder_node->addChild('feed');
                                     $new_feed->addAttribute('url', $feed_url);
@@ -1014,12 +1092,12 @@ if (isset($_SESSION['username'])) {
                             }
                             if (isset($entry->outline)) {
                                 $folder_name = (string)($entry['text'] ?? $entry['title'] ?? 'Sin nombre');
-                                $process_opml_outline($entry->outline, $folder_name, $xml_data, $existing_urls);
+                                $process_opml_outline($entry->outline, $folder_name, $xml_feeds, $existing_urls);
                             }
                         }
                     };
-                    $process_opml_outline($opml_xml->body->outline, '', $xml_data, $existing_urls);
-                    $xml_data->asXML($userFile);
+                    $process_opml_outline($opml_xml->body->outline, '', $xml_feeds, $existing_urls);
+                    $xml_feeds->asXML($feedsFile);
                     header('Location: nisaba.php?view=sources');
                     exit;
                 }
@@ -1033,20 +1111,19 @@ if (isset($_SESSION['username'])) {
         if (isset($_POST['save_note'])) {
             $guid = $_POST['article_guid'];
             $note_content = $_POST['note_content'];
-            $existing_note = $xml_data->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
+            $existing_note = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
             if (!empty($existing_note)) {
                 $existing_note[0]->content = $note_content;
             } else {
-                if(!isset($xml_data->notes)) $xml_data->addChild('notes');
-                $note = $xml_data->notes->addChild('note');
+                $note = $xml_notes->addChild('note');
                 $note->addChild('article_guid', $guid);
                 $note->addChild('article_title', $_POST['article_title']);
                 $note->addChild('article_link', $_POST['article_link']);
                 $note->addChild('content', $note_content);
                 $note->addChild('date', date('c'));
             }
-            $xml_data->asXML($userFile);
-            generate_notes_rss($xml_data, $username);
+            $xml_notes->asXML($notesFile);
+            generate_notes_rss($xml_data, $xml_notes, $username);
             $_SESSION['notes_feedback'] = ['type' => 'success', 'message' => 'Nota guardada con éxito. Puedes ver todas en la sección «Notas».'];
             header('Location: ' . ($_POST['return_url'] ?? 'nisaba.php?article_guid=' . urlencode($guid)));
             exit;
@@ -1056,32 +1133,32 @@ if (isset($_SESSION['username'])) {
             $guid = $_POST['article_guid'];
             $new_title = $_POST['article_title'];
             $new_content = $_POST['note_content'];
-            $note_to_edit = $xml_data->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
+            $note_to_edit = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
             if (!empty($note_to_edit)) {
                 $note_to_edit[0]->article_title = $new_title;
                 $note_to_edit[0]->content = $new_content;
             }
-            $xml_data->asXML($userFile);
-            generate_notes_rss($xml_data, $username);
+            $xml_notes->asXML($notesFile);
+            generate_notes_rss($xml_data, $xml_notes, $username);
             header('Location: nisaba.php?view=notes');
             exit;
         }
 
         if (isset($_POST['delete_note'])) {
             $guid = $_POST['delete_note'];
-            $notes = $xml_data->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
+            $notes = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
             if (!empty($notes)) {
                 unset($notes[0][0]);
             }
-            $xml_data->asXML($userFile);
-            generate_notes_rss($xml_data, $username);
+            $xml_notes->asXML($notesFile);
+            generate_notes_rss($xml_data, $xml_notes, $username);
             header('Location: nisaba.php?view=notes');
             exit;
         }
 
         if (isset($_POST['send_to_telegram'])) {
             $guid = $_POST['send_to_telegram'];
-            $note_to_send = $xml_data->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
+            $note_to_send = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
             
             if (!empty($note_to_send)) {
                 $telegram_bot_token = isset($xml_data->settings->telegram_bot_token) ? (string)$xml_data->settings->telegram_bot_token : '';
@@ -1162,7 +1239,7 @@ if (isset($_SESSION['username'])) {
             $xml_data->settings->archive_integration = isset($_POST['archive_integration']) ? 'true' : 'false';
 
             if ($xml_data->asXML($userFile)) {
-                generate_notes_rss($xml_data, $username);
+                generate_notes_rss($xml_data, $xml_notes, $username);
                 $_SESSION['settings_feedback'] = 'Configuración guardada correctamente.';
             } else {
                 $_SESSION['settings_feedback'] = 'ERROR: No se pudo guardar la configuración en el archivo.';
@@ -1349,7 +1426,7 @@ if (isset($_SESSION['username'])) {
             if (empty($feed_url) || !filter_var($feed_url, FILTER_VALIDATE_URL)) {
                 $feed_error = 'Por favor, introduce una URL de feed válida.';
             } else {
-                if (count($xml_data->xpath('//feed[@url="' . htmlspecialchars($feed_url) . '"]')) > 0) {
+                if (count($xml_feeds->xpath('//feed[@url="' . htmlspecialchars($feed_url) . '"]')) > 0) {
                     $feed_error = 'Ya estás suscrito a este feed.';
                 } else {
                     $feed_title = $feed_url;
@@ -1375,16 +1452,15 @@ if (isset($_SESSION['username'])) {
                         }
                     }
                     $favicon_path = get_favicon($feed_url);
-                    if(!isset($xml_data->feeds)) $xml_data->addChild('feeds');
-                    $folder = $xml_data->xpath('//folder[@name="' . htmlspecialchars($folder_name) . '"]');
-                    $folder_node = !empty($folder) ? $folder[0] : $xml_data->feeds->addChild('folder');
+                    $folder = $xml_feeds->xpath('//folder[@name="' . htmlspecialchars($folder_name) . '"]');
+                    $folder_node = !empty($folder) ? $folder[0] : $xml_feeds->addChild('folder');
                     if (empty($folder)) $folder_node->addAttribute('name', $folder_name);
                     $new_feed = $folder_node->addChild('feed');
                     $new_feed->addAttribute('url', $feed_url);
                     $new_feed->addAttribute('name', $feed_title);
                     $new_feed->addAttribute('favicon', $favicon_path);
                     $new_feed->addAttribute('lang', $feed_lang);
-                    $xml_data->asXML($userFile);
+                    $xml_feeds->asXML($feedsFile);
                     header('Location: nisaba.php?view=sources');
                     exit;
                 }
@@ -1393,13 +1469,13 @@ if (isset($_SESSION['username'])) {
 
         if (isset($_POST['delete_feed'])) {
             $feed_url = $_POST['feed_url'];
-            $feeds = $xml_data->xpath('//feed[@url="' . htmlspecialchars($feed_url) . '"]');
+            $feeds = $xml_feeds->xpath('//feed[@url="' . htmlspecialchars($feed_url) . '"]');
             if (!empty($feeds)) {
                 $parent = $feeds[0]->xpath('parent::*')[0];
                 unset($feeds[0][0]);
                 if ($parent->getName() === 'folder' && $parent->count() == 0) unset($parent[0]);
             }
-            $xml_data->asXML($userFile);
+            $xml_feeds->asXML($feedsFile);
             header('Location: nisaba.php?view=sources');
             exit;
         }
@@ -1409,7 +1485,7 @@ if (isset($_SESSION['username'])) {
             $new_name = trim($_POST['feed_name']);
             $new_folder_name = trim($_POST['folder_name']);
             if(empty($new_folder_name)) $new_folder_name = 'General';
-            $feeds = $xml_data->xpath('//feed[@url="' . htmlspecialchars($original_url) . '"]');
+            $feeds = $xml_feeds->xpath('//feed[@url="' . htmlspecialchars($original_url) . '"]');
             if (!empty($feeds)) {
                 $feed_node = $feeds[0];
                 $feed_node['name'] = $new_name;
@@ -1429,8 +1505,8 @@ if (isset($_SESSION['username'])) {
                 $old_folder = $feed_node->xpath('parent::*')[0];
                 $old_folder_name = (string)$old_folder['name'];
                 if ($old_folder_name !== $new_folder_name) {
-                    $new_folder = $xml_data->xpath('//folder[@name="' . htmlspecialchars($new_folder_name) . '"]');
-                    $new_folder_node = !empty($new_folder) ? $new_folder[0] : $xml_data->feeds->addChild('folder');
+                    $new_folder = $xml_feeds->xpath('//folder[@name="' . htmlspecialchars($new_folder_name) . '"]');
+                    $new_folder_node = !empty($new_folder) ? $new_folder[0] : $xml_feeds->addChild('folder');
                     if (empty($new_folder)) $new_folder_node->addAttribute('name', $new_folder_name);
                     $dom_feed = dom_import_simplexml($feed_node);
                     $dom_new_folder = dom_import_simplexml($new_folder_node);
@@ -1438,7 +1514,7 @@ if (isset($_SESSION['username'])) {
                     if ($old_folder->count() == 0) unset($old_folder[0]);
                 }
             }
-            $xml_data->asXML($userFile);
+            $xml_feeds->asXML($feedsFile);
             header('Location: nisaba.php?view=sources');
             exit;
         }
@@ -1712,8 +1788,8 @@ if (isset($_SESSION['username'])) {
                         </div>
 <?php
 $own_notes_sidebar = [];
-if (isset($xml_data->notes)) {
-    $notes_nodes = $xml_data->notes->note;
+if (isset($xml_notes->note)) {
+    $notes_nodes = $xml_notes->note;
     $notes_array = [];
     foreach ($notes_nodes as $note_node) {
         $notes_array[] = $note_node;
@@ -1724,8 +1800,8 @@ if (isset($xml_data->notes)) {
     $own_notes_sidebar = array_slice($notes_array, 0, 2);
 }
 $received_notes_all = [];
-if (isset($xml_data->received_notes_cache)) {
-    foreach ($xml_data->received_notes_cache->note as $note_node) {
+if (isset($xml_received_notes->note)) {
+    foreach ($xml_received_notes->note as $note_node) {
         $received_notes_all[] = $note_node;
     }
     usort($received_notes_all, function($a, $b) {
@@ -1821,8 +1897,8 @@ if (file_exists($cacheFile)) {
 
 $sidebar_folders = [];
 $total_unread_all = 0;
-if (isset($xml_data->feeds)) {
-    foreach ($xml_data->feeds->folder as $folder_node) {
+if (isset($xml_feeds->folder)) {
+    foreach ($xml_feeds->folder as $folder_node) {
         $folder_name = (string)$folder_node['name'];
         $folder_unread = 0;
         $folder_feeds = [];
@@ -1962,7 +2038,7 @@ $current_feed = $_GET['feed'] ?? '';
                         if($cache_xml) {
                             $current_update_id = isset($xml_data->settings->last_update_id) ? (string)$xml_data->settings->last_update_id : '';
 
-                            foreach ($xml_data->feeds->folder as $folder) {
+                            foreach ($xml_feeds->folder as $folder) {
                                 $folder_name = (string)$folder['name'];
                                 $content_for_folder = '';
                                 foreach ($folder->feed as $feed) {
@@ -1981,7 +2057,7 @@ $current_feed = $_GET['feed'] ?? '';
                                     $summary_text = '';
                                     $existing_summary = null;
                                     if (!empty($current_update_id)) {
-                                         $summaries = $xml_data->xpath('//summary[@folder="' . htmlspecialchars($folder_name) . '" and @update_id="' . $current_update_id . '"]');
+                                         $summaries = $xml_summaries->xpath('//summary[@folder="' . htmlspecialchars($folder_name) . '" and @update_id="' . $current_update_id . '"]');
                                          if (!empty($summaries)) {
                                              $existing_summary = $summaries[0];
                                          }
@@ -1990,50 +2066,25 @@ $current_feed = $_GET['feed'] ?? '';
                                     if ($existing_summary) {
                                         $summary_text = (string)$existing_summary;
                                     } else {
-                                        $unread_count_for_folder = 0;
-                                        $feeds_in_folder = $xml_data->xpath('//folder[@name="' . htmlspecialchars($folder_name) . '"]/feed');
-                                        foreach ($feeds_in_folder as $feed) {
-                                            $feed_url = (string)$feed['url'];
-                                            $unread_articles = $cache_xml->xpath('//item[read="0" and feed_url="' . $feed_url . '"]');
-                                            $unread_count_for_folder += count($unread_articles);
-                                        }
+                                        $summary_text = get_gemini_summary($content_for_folder, $gemini_api_key, $gemini_model, $gemini_prompt);
+                                        if (!str_starts_with($summary_text, 'Error')) {
+                                            $all_summaries_for_folder = $xml_summaries->xpath('//summary[@folder="' . htmlspecialchars($folder_name) . '"]');
+                                            usort($all_summaries_for_folder, function($a, $b) { return strtotime((string)$b['date']) - strtotime((string)$a['date']); });
 
-                                        $latest_summary = null;
-                                        $summaries = $xml_data->xpath('//summary[@folder="' . htmlspecialchars($folder_name) . '"]');
-                                        if (!empty($summaries)) {
-                                            usort($summaries, function($a, $b) { return strtotime((string)$b['date']) - strtotime((string)$a['date']); });
-                                            $latest_summary = $summaries[0];
-                                        }
+                                            while (count($all_summaries_for_folder) >= 8) {
+                                                $oldest_summary = array_pop($all_summaries_for_folder);
+                                                unset($oldest_summary[0]);
+                                            }
 
-                                        if ($unread_count_for_folder < 10 && $latest_summary) {
-                                            $summary_text = (string)$latest_summary;
-                                            // Promote the old summary to the current update ID
+                                            $new_summary = $xml_summaries->addChild('summary', $summary_text);
+                                            $new_summary->addAttribute('folder', $folder_name);
                                             if (!empty($current_update_id)) {
-                                                if (isset($latest_summary['update_id'])) {
-                                                    $latest_summary['update_id'] = $current_update_id;
-                                                } else {
-                                                    $latest_summary->addAttribute('update_id', $current_update_id);
-                                                }
-                                                $xml_data->asXML($userFile);
+                                                $new_summary->addAttribute('update_id', $current_update_id);
                                             }
-                                        } else {
-                                            $summary_text = get_gemini_summary($content_for_folder, $gemini_api_key, $gemini_model, $gemini_prompt);
-                                            if (!str_starts_with($summary_text, 'Error')) {
-                                                $old_summaries = $xml_data->xpath('//summary[@folder="' . htmlspecialchars($folder_name) . '"]');
-                                                foreach ($old_summaries as $old_summary) {
-                                                    unset($old_summary[0]);
-                                                }
-                                                if (!isset($xml_data->summaries)) $xml_data->addChild('summaries');
-                                                $new_summary = $xml_data->summaries->addChild('summary', $summary_text);
-                                                $new_summary->addAttribute('folder', $folder_name);
-                                                if (!empty($current_update_id)) {
-                                                    $new_summary->addAttribute('update_id', $current_update_id);
-                                                }
-                                                $new_summary->addAttribute('date', date('c'));
-                                                $xml_data->asXML($userFile);
-                                            }
-                                            usleep(1600000); // Pausa de 1.6 segundos (1600 ms) para no saturar la API
+                                            $new_summary->addAttribute('date', date('c'));
+                                            $xml_summaries->asXML($summariesFile);
                                         }
+                                        usleep(1600000); // Pausa de 1.6 segundos (1600 ms) para no saturar la API
                                     }
 
                                     echo '<h3>' . htmlspecialchars($folder_name) . '</h3>';
@@ -2047,10 +2098,8 @@ $current_feed = $_GET['feed'] ?? '';
                                     $note_title = "Análisis de la carpeta: " . htmlspecialchars($folder_name);
                                     $note_link = "nisaba.php?view=nisaba_summary";
                                     $note_text = '';
-                                    if(isset($xml_data->notes)) {
-                                        $notes = $xml_data->xpath('//note[article_guid="' . htmlspecialchars($note_guid) . '"]');
-                                        if (!empty($notes)) $note_text = (string)$notes[0]->content;
-                                    }
+                                    $notes = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($note_guid) . '"]');
+                                    if (!empty($notes)) $note_text = (string)$notes[0]->content;
 
                                     echo '<form method="POST" action="nisaba.php?view=nisaba_summary" class="note-form" style="margin-top: 1em;">';
                                     echo '    <input type="hidden" name="article_guid" value="' . htmlspecialchars($note_guid) . '">';
@@ -2068,7 +2117,7 @@ $current_feed = $_GET['feed'] ?? '';
                             }
                         }
                     }
-                    generate_analysis_rss($xml_data, $username);
+                    generate_analysis_rss($xml_data, $xml_summaries, $username);
                     if (!$has_any_unread) {
                         echo "<p>¡Estás al día! No hay artículos nuevos que analizar.</p>";
                     }
@@ -2108,7 +2157,7 @@ $current_feed = $_GET['feed'] ?? '';
 
                                     // Get favicon from the cloned object
                                     $feed_url = (string)$article->feed_url;
-                                    $feeds = $xml_data->xpath('//feed[@url="' . htmlspecialchars($feed_url) . '"]');
+                                    $feeds = $xml_feeds->xpath('//feed[@url="' . htmlspecialchars($feed_url) . '"]');
                                     if (!empty($feeds)) {
                                         $favicon_url = (string)$feeds[0]['favicon'];
                                     }
@@ -2181,10 +2230,8 @@ $current_feed = $_GET['feed'] ?? '';
                             <div class="form-group">
                                 <?php
                                     $note_text = '';
-                                    if(isset($xml_data->notes)) {
-                                        $notes = $xml_data->xpath('//note[article_guid="' . htmlspecialchars($article->guid) . '"]');
-                                        if (!empty($notes)) $note_text = (string)$notes[0]->content;
-                                    }
+                                    $notes = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($article->guid) . '"]');
+                                    if (!empty($notes)) $note_text = (string)$notes[0]->content;
                                 ?>
                                 <textarea name="note_content" class="postit-textarea"><?php echo htmlspecialchars($note_text); ?></textarea>
                             </div>
@@ -2222,8 +2269,8 @@ $current_feed = $_GET['feed'] ?? '';
                                     });
 
                                     $favicon_map = [];
-                                    if (isset($xml_data->feeds)) {
-                                        foreach ($xml_data->xpath('//feed') as $feed) {
+                                    if (isset($xml_feeds->folder)) {
+                                        foreach ($xml_feeds->xpath('//feed') as $feed) {
                                             $favicon_map[(string)$feed['url']] = (string)$feed['favicon'];
                                         }
                                     }
@@ -2259,7 +2306,7 @@ $current_feed = $_GET['feed'] ?? '';
                         $folder_name = isset($_GET['name']) ? $_GET['name'] : '';
                         $unread_count = 0;
                         if (file_exists($cacheFile) && !empty($folder_name)) {
-                            $feeds_in_folder = $xml_data->xpath('//folder[@name="' . htmlspecialchars($folder_name) . '"]/feed');
+                            $feeds_in_folder = $xml_feeds->xpath('//folder[@name="' . htmlspecialchars($folder_name) . '"]/feed');
                             $feed_urls = [];
                             foreach ($feeds_in_folder as $feed) {
                                 $feed_urls[] = (string)$feed['url'];
@@ -2278,7 +2325,7 @@ $current_feed = $_GET['feed'] ?? '';
                     <ul class="article-list">
                         <?php
                         if (isset($cacheFile) && file_exists($cacheFile) && !empty($folder_name)) {
-                            $feeds_in_folder = $xml_data->xpath('//folder[@name="' . htmlspecialchars($folder_name) . '"]/feed');
+                            $feeds_in_folder = $xml_feeds->xpath('//folder[ @name="' . htmlspecialchars($folder_name) . '"]/feed');
                             $feed_urls = [];
                             foreach ($feeds_in_folder as $feed) {
                                 $feed_urls[] = (string)$feed['url'];
@@ -2302,8 +2349,8 @@ $current_feed = $_GET['feed'] ?? '';
                                 });
 
                                 $favicon_map = [];
-                                if (isset($xml_data->feeds)) {
-                                    foreach ($xml_data->xpath('//feed') as $feed) {
+                                if (isset($xml_feeds->folder)) {
+                                    foreach ($xml_feeds->xpath('//feed') as $feed) {
                                         $favicon_map[(string)$feed['url']] = (string)$feed['favicon'];
                                     }
                                 }
@@ -2340,7 +2387,7 @@ $current_feed = $_GET['feed'] ?? '';
                         $favicon_url = 'nisaba.png';
                         $unread_count = 0;
 
-                        $feeds = $xml_data->xpath('//feed[@url="' . htmlspecialchars($selected_feed_url) . '"]');
+                        $feeds = $xml_feeds->xpath('//feed[ @url="' . htmlspecialchars($selected_feed_url) . '"]');
                         if (!empty($feeds)) {
                             $feed_name = (string)$feeds[0]['name'];
                             $favicon_url = (string)$feeds[0]['favicon'];
@@ -2388,15 +2435,14 @@ $current_feed = $_GET['feed'] ?? '';
                     <h2>Notas Recibidas</h2>
                     <div class="notes-container">
                     <?php
-                        $received_notes_view = [];
-                        if (isset($xml_data->received_notes_cache)) {
-                            foreach ($xml_data->received_notes_cache->note as $note_node) {
-                                $received_notes_view[] = $note_node;
-                            }
-                            usort($received_notes_view, function($a, $b) {
-                                return strtotime((string)$b->date) - strtotime((string)$a->date);
-                            });
-                        }
+                                            $received_notes_view = [];
+                                            if (isset($xml_received_notes->note)) {
+                                                foreach ($xml_received_notes->note as $note_node) {
+                                                    $received_notes_view[] = $note_node;
+                                                }
+                                                usort($received_notes_view, function($a, $b) {
+                                                    return strtotime((string)$b->date) - strtotime((string)$a->date);
+                                                });                        }
                         if (empty($received_notes_view)) {
                             echo '<p>No has recibido notas todavía. Añade Nisabas externos desde Gestionar Fuentes.</p>';
                         } else {
@@ -2460,8 +2506,8 @@ $current_feed = $_GET['feed'] ?? '';
                     ?>
                     <div class="notes-container">
                         <?php
-                        if (isset($xml_data->notes)) {
-                            $notes_nodes = $xml_data->notes->note;
+                        if (isset($xml_notes->note)) {
+                            $notes_nodes = $xml_notes->note;
                             $notes_array = [];
                             foreach ($notes_nodes as $note) {
                                 $notes_array[] = $note;
@@ -2652,7 +2698,7 @@ $current_feed = $_GET['feed'] ?? '';
 <h2>Gestión de Fuentes</h2>
                     <?php if ($feed_error): ?><p class="error"><?php echo $feed_error; ?></p><?php endif; ?>
                     <?php if ($feed_success): ?><p style="color: green; margin-bottom: 1em; font-weight: 600;"><?php echo $feed_success; ?></p><?php endif; ?>
-                    <?php if(isset($xml_data->feeds)) { foreach ($xml_data->feeds->folder as $folder): ?>
+                    <?php if(isset($xml_feeds->folder)) { foreach ($xml_feeds->folder as $folder): ?>
                         <h4><?php echo htmlspecialchars($folder['name']); ?></h4>
                         <ul class="feed-manage-list">
                             <?php foreach ($folder->feed as $feed): ?>
