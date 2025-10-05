@@ -467,12 +467,20 @@ function normalize_feed_text($text) {
 }
 
 function sanitize_cache_duration($value) {
-    $allowed = ['0', '720', (string)DEFAULT_CACHE_DURATION_HOURS, '4320'];
-    $value = (string)$value;
+    $allowed = ['2880', '4320', '5760'];
+    $value = trim((string)$value);
     if (!in_array($value, $allowed, true)) {
-        return (string)DEFAULT_CACHE_DURATION_HOURS;
+        return '2880';
     }
     return $value;
+}
+
+function sanitize_show_read_articles($value) {
+    $value = trim((string)$value);
+    if ($value === 'true' || $value === 'false') {
+        return $value;
+    }
+    return 'true';
 }
 
 function load_prompt_template(): string {
@@ -1138,10 +1146,18 @@ if (isset($_SESSION['username'])) {
                 $xml_data->settings->telegram_chat_id = $_POST['telegram_chat_id'];
             }
             if (isset($_POST['cache_duration'])) {
-                $xml_data->settings->cache_duration = $_POST['cache_duration'];
+                $new_duration = sanitize_cache_duration($_POST['cache_duration']);
+                if (isset($xml_data->settings->cache_duration)) {
+                    unset($xml_data->settings->cache_duration);
+                }
+                $xml_data->settings->addChild('cache_duration', $new_duration);
             }
             if (isset($_POST['show_read_articles'])) {
-                $xml_data->settings->show_read_articles = $_POST['show_read_articles'];
+                $new_show_read = sanitize_show_read_articles($_POST['show_read_articles']);
+                if (isset($xml_data->settings->show_read_articles)) {
+                    unset($xml_data->settings->show_read_articles);
+                }
+                $xml_data->settings->addChild('show_read_articles', $new_show_read);
             }
             $xml_data->settings->archive_integration = isset($_POST['archive_integration']) ? 'true' : 'false';
 
@@ -1874,6 +1890,7 @@ $current_feed = $_GET['feed'] ?? '';
                                     <h5>Gestión</h5>
                                     <a href="?view=sources" class="sidebar-utility-link">Fuentes</a>
                                     <a href="?view=settings" class="sidebar-utility-link">Configuración</a>
+                                    <a href="?logout" class="sidebar-utility-link">Salir</a>
                                 </div>
                             </div>
                             <div class="notes-stack-wrapper">
@@ -2516,7 +2533,10 @@ $current_feed = $_GET['feed'] ?? '';
                         <hr>
                         <div class="form-group">
                             <label for="gemini_api_key">API Key de Google Gemini</label>
-                            <input type="password" id="gemini_api_key" name="gemini_api_key" placeholder="************">
+                            <input type="password" id="gemini_api_key" name="gemini_api_key" placeholder="Dejar en blanco para no cambiar" class="form-group input">
+                            <?php if (isset($xml_data->settings->gemini_api_key) && !empty((string)$xml_data->settings->gemini_api_key)): ?>
+                                <p style="font-size: 0.8em; color: #555;">API Key guardada: <?php echo mask_api_key((string)$xml_data->settings->gemini_api_key); ?></p>
+                            <?php endif; ?>
                         </div>
                         <div class="form-group">
                             <label for="gemini_model">Modelo de Gemini</label>
@@ -2549,7 +2569,7 @@ $current_feed = $_GET['feed'] ?? '';
 
                         <div class="form-group">
                             <label for="telegram_bot_token">Token del Bot de Telegram (opcional)</label>
-                            <input type="password" id="telegram_bot_token" name="telegram_bot_token" placeholder="************" class="form-group input">
+                            <input type="password" id="telegram_bot_token" name="telegram_bot_token" placeholder="Dejar en blanco para no cambiar" class="form-group input">
                             <?php if (isset($xml_data->settings->telegram_bot_token) && !empty((string)$xml_data->settings->telegram_bot_token)): ?>
                                 <p style="font-size: 0.8em; color: #555;">Token guardado: <?php echo mask_api_key((string)$xml_data->settings->telegram_bot_token); ?></p>
                             <?php endif; ?>
@@ -2569,17 +2589,24 @@ $current_feed = $_GET['feed'] ?? '';
                             <label for="cache_duration">Permanencia de artículos leídos en la caché</label>
                             <select id="cache_duration" name="cache_duration" class="form-group input">
                                 <?php
-                                    $durations = [
-                                        '720' => '1 mes (≈30 días)',
-                                        (string)DEFAULT_CACHE_DURATION_HOURS => '2 meses (≈60 días)',
-                                        '4320' => '6 meses (≈180 días)'
+                                    $durations_map = [
+                                        '2880' => '4 meses (≈120 días)',
+                                        '4320' => '6 meses (≈180 días)',
+                                        '5760' => '8 meses (≈240 días)'
                                     ];
-                                    $selected_duration = sanitize_cache_duration(isset($xml_data->settings->cache_duration) ? (string)$xml_data->settings->cache_duration : (string)DEFAULT_CACHE_DURATION_HOURS);
-                                    if (!array_key_exists($selected_duration, $durations)) {
-                                        $selected_duration = (string)DEFAULT_CACHE_DURATION_HOURS;
+                                    
+                                    $saved_value = '2880'; // Default
+                                    if (isset($xml_data->settings->cache_duration)) {
+                                        $saved_value = trim((string)$xml_data->settings->cache_duration);
                                     }
-                                    foreach ($durations as $value => $label) {
-                                        echo '<option value="' . $value . '"' . ($selected_duration === $value ? ' selected' : '') . '>' . $label . '</option>';
+
+                                    if (!isset($durations_map[$saved_value])) {
+                                        $saved_value = '2880';
+                                    }
+
+                                    foreach ($durations_map as $value => $label) {
+                                        $selected_attr = ($saved_value === $value) ? ' selected' : '';
+                                        echo '<option value="' . $value . '"' . $selected_attr . '>' . $label . '</option>';
                                     }
                                 ?>
                             </select>
@@ -2588,10 +2615,17 @@ $current_feed = $_GET['feed'] ?? '';
                             <label for="show_read_articles">Artículos leídos</label>
                             <select id="show_read_articles" name="show_read_articles" class="form-group input">
                                 <?php
-                                    $show_read_options = ['true' => 'Mostrar en gris hasta que se borren de caché', 'false' => 'Ocultar en cuanto se marcan como leídos'];
-                                    $selected_show_read = isset($xml_data->settings->show_read_articles) ? (string)$xml_data->settings->show_read_articles : 'true';
-                                    foreach($show_read_options as $value => $label) {
-                                        echo '<option value="' . $value . '"' . ($selected_show_read === $value ? ' selected' : '') . '>' . $label . '</option>';
+                                    $show_read_opts = ['true' => 'Mostrar en gris hasta que se borren de caché', 'false' => 'Ocultar en cuanto se marcan como leídos'];
+                                    $saved_show_read = 'true'; // Default
+                                    if (isset($xml_data->settings->show_read_articles)) {
+                                        $saved_show_read = trim((string)$xml_data->settings->show_read_articles);
+                                    }
+                                    if ($saved_show_read !== 'true' && $saved_show_read !== 'false') {
+                                        $saved_show_read = 'true';
+                                    }
+                                    foreach($show_read_opts as $value => $label) {
+                                        $selected_attr = ($saved_show_read === $value) ? ' selected' : '';
+                                        echo '<option value="' . $value . '"' . $selected_attr . '>' . $label . '</option>';
                                     }
                                 ?>
                             </select>
