@@ -106,7 +106,7 @@ Síntesis ejecutiva (máximo 4 frases) que resume las principales corrientes de 
 ## Señales Débiles y Disrupciones Identificadas
 
 ### Título conciso del primer hallazgo en español
-{{enlace}}
+{{título}}
 
 Síntesis de Impacto: Una o dos frases que capturan por qué esta noticia es estratégicamente relevante, no un simple resumen.
 
@@ -115,7 +115,7 @@ Explicación de la Señal: Explicación concisa (máximo 5 frases) que justifica
 ---
 
 ### Título conciso del segundo hallazgo en español
-{{enlace}}
+{{título}}
 
 Síntesis de Impacto: ...
 
