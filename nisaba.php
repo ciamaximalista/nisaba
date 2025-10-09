@@ -592,9 +592,12 @@ Sin Adornos: No añadas emojis, comillas innecesarias, etiquetas extra, ni texto
 
 No se han detectado señales de disrupción significativas en este bloque de fuentes.";
     $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model . ":generateContent?key=" . $api_key;
-    $prompt = $prompt_template . "\n\n" . $content;
+    $prompt = $prompt_template . "
+
+" . $content;
     $data = ['contents' => [['parts' => [['text' => $prompt]]]]];
-    $options = ['http' => ['header'  => "Content-Type: application/json\n", 'method'  => 'POST', 'content' => json_encode($data), 'ignore_errors' => true]];
+    $options = ['http' => ['header'  => "Content-Type: application/json
+", 'method'  => 'POST', 'content' => json_encode($data), 'ignore_errors' => true]];
     $context = stream_context_create($options);
     $result = @file_get_contents($url, false, $context);
 
@@ -962,6 +965,20 @@ if (isset($_SESSION['username'])) {
     $archive_integration_enabled = isset($xml_data->settings->archive_integration) && (string)$xml_data->settings->archive_integration === 'true';
 
 
+    // Determine if we should show read articles for the current request
+    $show_read_for_this_request = ($show_read_articles === 'true');
+    if (isset($_GET['show_read'])) {
+        $show_read_for_this_request = $_GET['show_read'] === '1';
+    }
+
+    // Build the toggle URL and button text
+    $query_params = $_GET;
+    $query_params['show_read'] = $show_read_for_this_request ? '0' : '1';
+    $toggle_url = '?' . http_build_query($query_params);
+    $button_text = $show_read_for_this_request ? 'Ocultar leídos' : 'Ver leídos';
+    $toggle_button_html = "<a href=\"{$toggle_url}\" class=\"btn btn-outline-info btn-sm\">{$button_text}</a>";
+
+
     // --- 3.2. MANEJO DE ACCIONES (GET y POST) ---
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action']) && $_GET['action'] === 'mark_all_read') {
@@ -1040,6 +1057,24 @@ if (isset($_SESSION['username'])) {
             header('Content-Type: application/json');
             echo json_encode(['status' => 'success']);
             exit;
+        }
+        $return_url = $_GET['return_url'] ?? 'nisaba.php?view=all_feeds';
+        header('Location: ' . $return_url);
+        exit;
+    }
+
+    if (isset($_GET['action']) && $_GET['action'] === 'mark_unread' && isset($_GET['guid'])) {
+        if (file_exists($cacheFile)) {
+            $cache_xml = simplexml_load_file($cacheFile);
+            $article_guid = $_GET['guid'];
+            $articles = $cache_xml->xpath('//item[guid="' . htmlspecialchars($article_guid) . '"]');
+            if (!empty($articles)) {
+                $articles[0]->read = 0;
+                if (isset($articles[0]->read_at)) {
+                    unset($articles[0]->read_at);
+                }
+                $cache_xml->asXML($cacheFile);
+            }
         }
         $return_url = $_GET['return_url'] ?? 'nisaba.php?view=all_feeds';
         header('Location: ' . $return_url);
@@ -2483,6 +2518,7 @@ $current_feed = $_GET['feed'] ?? '';
 <?php if ($archive_today_url !== ''): ?>
                             <a href="<?php echo htmlspecialchars($archive_today_url); ?>" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary">Versión en Archive.today</a>
 <?php endif; ?>
+                            <a href="?action=mark_unread&guid=<?php echo urlencode($article->guid); ?>&return_url=<?php echo urlencode('?feed=' . urlencode((string)$article->feed_url) . '&folder=' . urlencode($_GET['folder'] ?? '')); ?>" class="btn btn-outline-primary">Marcar como no leído</a>
                         </div>
                         <hr>
                         <div class="article-nav">
@@ -2513,7 +2549,7 @@ $current_feed = $_GET['feed'] ?? '';
                         <p>Artículo no encontrado.</p>
                     <?php endif; ?>
                 <?php elseif ($current_view === 'all_feeds'): ?>
-                    <div style="margin-bottom: 1em;"><button onclick="markAllRead()" class="btn btn-outline-success btn-sm">Todos leídos</button></div>
+                    <div style="margin-bottom: 1em; display: flex; gap: 0.5rem;"><button onclick="markAllRead()" class="btn btn-outline-success btn-sm">Todos leídos</button><?php echo $toggle_button_html; ?></div>
                     <?php
                         $unread_count = 0;
                         if (file_exists($cacheFile)) {
@@ -2549,7 +2585,7 @@ $current_feed = $_GET['feed'] ?? '';
 
                                     foreach ($sorted_articles as $item) {
                                         $is_read = (string)$item->read === '1';
-                                        if ($is_read && $show_read_articles === 'false') continue;
+                                        if ($is_read && !$show_read_for_this_request) continue;
 
                                         $feed_url = (string)$item->feed_url;
                                         $favicon_url = $favicon_map[$feed_url] ?? 'nisaba.png';
@@ -2572,7 +2608,7 @@ $current_feed = $_GET['feed'] ?? '';
                         } else { echo "<li>No se ha generado la cache.</li>"; }
                         ?>
                     </ul>
-                    <div style="margin-top: 1em;"><button onclick="markAllRead()" class="btn btn-outline-success btn-sm">Todos leídos</button></div>
+                    <div style="margin-top: 1em; display: flex; gap: 0.5rem;"><button onclick="markAllRead()" class="btn btn-outline-success btn-sm">Todos leídos</button><?php echo $toggle_button_html; ?></div>
                 <?php elseif ($current_view === 'folder'): ?>
                     <?php 
                         $folder_name = isset($_GET['name']) ? $_GET['name'] : '';
@@ -2592,8 +2628,7 @@ $current_feed = $_GET['feed'] ?? '';
                             }
                         }
                     ?>
-                    <div style="margin-bottom: 1em;"><button onclick="markAllRead()" class="btn btn-outline-success btn-sm">Todos leídos</button></div>
-                    <h2>Carpeta: <?php echo htmlspecialchars($folder_name); ?> (<?php echo $unread_count; ?>)</h2>
+                    <div style="margin-bottom: 1em; display: flex; gap: 0.5rem;"><button onclick="markAllRead()" class="btn btn-outline-success btn-sm">Todos leídos</button><?php echo $toggle_button_html; ?></div>
                     <ul class="article-list">
                         <?php
                         if (isset($cacheFile) && file_exists($cacheFile) && !empty($folder_name)) {
@@ -2629,7 +2664,7 @@ $current_feed = $_GET['feed'] ?? '';
 
                                 foreach ($sorted_articles as $item) {
                                     $is_read = (string)$item->read === '1';
-                                    if ($is_read && $show_read_articles === 'false') continue;
+                                    if ($is_read && !$show_read_for_this_request) continue;
 
                                     $feed_url = (string)$item->feed_url;
                                     $favicon_url = $favicon_map[$feed_url] ?? 'nisaba.png';
@@ -2651,7 +2686,7 @@ $current_feed = $_GET['feed'] ?? '';
                         } else { echo "<li>Carpeta no encontrada o cache no generada.</li>"; }
                         ?>
                     </ul>
-                    <div style="margin-top: 1em;"><button onclick="markAllRead()" class="btn btn-outline-success btn-sm">Todos leídos</button></div>
+                    <div style="margin-top: 1em; display: flex; gap: 0.5rem;"><button onclick="markAllRead()" class="btn btn-outline-success btn-sm">Todos leídos</button><?php echo $toggle_button_html; ?></div>
                 <?php elseif ($current_view === 'feed_articles'): ?>
                     <?php
                         $selected_feed_url = $_GET['feed'];
@@ -2672,7 +2707,7 @@ $current_feed = $_GET['feed'] ?? '';
                             }
                         }
                     ?>
-                    <div style="margin-bottom: 1em;"><button onclick="markAllRead()" class="btn btn-outline-success btn-sm">Todos leídos</button></div>
+                    <div style="margin-bottom: 1em; display: flex; gap: 0.5rem;"><button onclick="markAllRead()" class="btn btn-outline-success btn-sm">Todos leídos</button><?php echo $toggle_button_html; ?></div>
                     <h2><img src="<?php echo htmlspecialchars($favicon_url); ?>" alt="" style="width: 32px; height: 32px; vertical-align: middle; margin-right: 10px; border-radius: 4px;"> <?php echo htmlspecialchars($feed_name); ?> (<?php echo $unread_count; ?>)</h2>
                     <ul class="article-list">
                         <?php
@@ -2681,28 +2716,38 @@ $current_feed = $_GET['feed'] ?? '';
                             if($cache_xml){
                                 $articles = $cache_xml->xpath('//item[feed_url="' . $selected_feed_url . '"]');
                                 if (empty($articles)) { echo "<li>No hay artículos por leer. Actualiza las feeds.</li>"; } 
-                                else { foreach ($articles as $item) {
-                                    $is_read = (string)$item->read === '1';
-                                    if ($is_read && $show_read_articles === 'false') continue;
-
-                                    $raw_title = $item->title_original;
-                                    $raw_desc = $item->content_original;
-                                    $display_title = normalize_feed_text($raw_title);
-                                    $display_desc = normalize_feed_text($raw_desc);
-                                    echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
-                                    if (!empty($item->image)) echo '<img src="' . htmlspecialchars($item->image) . '" alt="" class="article-image">';
-                                    echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '&folder=' . urlencode($_GET['folder'] ?? '') . '">' . htmlspecialchars($display_title) . '</a></h3>';
-                                    echo '<p>' . htmlspecialchars(truncate_by_words($display_desc ?? '', 80)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
-                                    if (!$is_read) {
-                                        echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
+                                else {
+                                    $sorted_articles = [];
+                                    foreach ($articles as $item) {
+                                        $sorted_articles[] = $item;
                                     }
-                                    echo '</li>';
-                                }}
+                                    usort($sorted_articles, function($a, $b) {
+                                        return strtotime((string)$b->pubDate) - strtotime((string)$a->pubDate);
+                                    });
+
+                                    foreach ($sorted_articles as $item) {
+                                        $is_read = (string)$item->read === '1';
+                                        if ($is_read && !$show_read_for_this_request) continue;
+
+                                        $raw_title = $item->title_original;
+                                        $raw_desc = $item->content_original;
+                                        $display_title = normalize_feed_text($raw_title);
+                                        $display_desc = normalize_feed_text($raw_desc);
+                                        echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
+                                        if (!empty($item->image)) echo '<img src="' . htmlspecialchars($item->image) . '" alt="" class="article-image">';
+                                        echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '&folder=' . urlencode($_GET['folder'] ?? '') . '">'. htmlspecialchars($display_title) . '</a></h3>';
+                                        echo '<p>' . htmlspecialchars(truncate_by_words($display_desc ?? '', 80)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
+                                        if (!$is_read) {
+                                            echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
+                                        }
+                                        echo '</li>';
+                                    }
+                                }
                             } else { echo "<li>No hay artículos por leer. Actualiza las feeds.</li>"; }
                         } else { echo "<li>No se ha generado la cache.</li>"; }
                         ?>
                     </ul>
-                    <div style="margin-top: 1em;"><button onclick="markAllRead()" class="btn btn-outline-success btn-sm">Todos leídos</button></div>
+                    <div style="margin-top: 1em; display: flex; gap: 0.5rem;"><button onclick="markAllRead()" class="btn btn-outline-success btn-sm">Todos leídos</button><?php echo $toggle_button_html; ?></div>
                 <?php elseif ($current_view === 'received_notes'): ?>
                     <h2>Notas Recibidas</h2>
                     <div class="notes-container">

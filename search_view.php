@@ -123,6 +123,7 @@ usort($notes_search_results, function($a, $b) {
 <?php if ($search_performed): ?>
     <hr>
     <h4>Resultados de búsqueda para "<?php echo htmlspecialchars($search_query); ?>" (<?php echo count($search_results); ?>)</h4>
+    <div style="margin-bottom: 1em; display: flex; gap: 0.5rem;"><?php echo $toggle_button_html; ?></div>
     
     <?php if (empty($search_results)): ?>
         <p class="text-muted mt-3">No se encontraron artículos que coincidan con todos los términos de búsqueda.</p>
@@ -132,6 +133,7 @@ usort($notes_search_results, function($a, $b) {
         <ul class="article-list">
             <?php foreach ($search_results as $item):
                 $is_read = (string)$item->read === '1';
+                if ($is_read && !$show_read_for_this_request) continue;
                 $feed_url = (string)$item->feed_url;
                 $favicon_url = $favicon_map[$feed_url] ?? 'nisaba.png';
                 $display_title = normalize_feed_text((string)$item->title_original);
