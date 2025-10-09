@@ -37,47 +37,143 @@ if (isset($_SESSION['feed_success'])) {
     unset($_SESSION['feed_success']);
 }
 
-function get_favicon($url) {
+function fetch_html_and_final_url(string $url): array {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_MAXREDIRS, 10);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Nisaba Favicon Fetcher/1.0');
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Accept: text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+    ]);
+    curl_setopt($ch, CURLOPT_ENCODING, '');
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+
+    $content = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $final_url = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+    curl_close($ch);
+
+    if ($http_code >= 200 && $http_code < 300) {
+        return [$content, $final_url];
+    }
+
+    return [false, $url];
+}
+
+function get_favicon($feed_url) {
+    $website_url = $feed_url; 
+    $feed_content = fetch_feed_content($feed_url);
+    if ($feed_content) {
+        $source_xml = normalize_feed_content($feed_content, $feed_url);
+        if ($source_xml) {
+            $link = '';
+            $is_atom = (strpos($source_xml->getName(), 'feed') !== false);
+            if ($is_atom) {
+                foreach ($source_xml->link as $link_node) {
+                    $attrs = $link_node->attributes();
+                    $rel = isset($attrs['rel']) ? strtolower((string)$attrs['rel']) : '';
+                    if ($rel === 'alternate' || $rel === '') {
+                        $href = trim((string)$attrs['href']);
+                        if ($href !== '') {
+                            $link = $href;
+                            break;
+                        }
+                    }
+                }
+            } elseif (isset($source_xml->channel->link)) {
+                $link = (string)$source_xml->channel->link;
+            }
+            
+            if (!empty($link) && filter_var($link, FILTER_VALIDATE_URL)) {
+                $website_url = $link;
+            }
+        }
+    }
+
     $default_favicon = 'nisaba.png';
-    $url_parts = parse_url($url);
+    $url_parts = parse_url($website_url);
     if (!$url_parts || !isset($url_parts['host'])) return $default_favicon;
-    $domain = $url_parts['scheme'] . '://' . $url_parts['host'];
-    $favicon_path = '';
-    $context = stream_context_create(['http' => ['user_agent' => 'Nisaba Feed Reader', 'timeout' => 5]]);
-    $html = file_get_contents($domain, false, $context);
+
+    $domain_url = ($url_parts['scheme'] ?? 'https') . '://' . $url_parts['host'];
+    
+    list($html, $final_url) = fetch_html_and_final_url($domain_url);
+
+    $final_domain_parts = parse_url($final_url);
+    $final_base_url = ($final_domain_parts['scheme'] ?? 'https') . '://' . $final_domain_parts['host'];
+
+    $favicon_candidates = [];
+
     if ($html) {
         $doc = new DOMDocument();
         @$doc->loadHTML($html);
         $links = $doc->getElementsByTagName('link');
         foreach ($links as $link) {
             $rel = strtolower($link->getAttribute('rel'));
-            if (in_array($rel, ['icon', 'shortcut icon'])) {
-                $favicon_url = $link->getAttribute('href');
-                if (substr($favicon_url, 0, 2) === '//') $favicon_url = 'http:' . $favicon_url;
-                elseif (substr($favicon_url, 0, 1) === '/') $favicon_url = $domain . $favicon_url;
-                elseif (substr($favicon_url, 0, 4) !== 'http') $favicon_url = $domain . '/' . $favicon_url;
-                $favicon_path = $favicon_url;
-                break;
+            if (in_array($rel, ['icon', 'shortcut icon', 'apple-touch-icon', 'apple-touch-icon-precomposed'])) {
+                $favicon_url = trim($link->getAttribute('href'));
+                if ($favicon_url === '') continue;
+
+                $favicon_url = nisaba_resolve_url($final_base_url, $favicon_url);
+                
+                $size = 0;
+                if ($link->hasAttribute('sizes') && $link->getAttribute('sizes') !== 'any') {
+                    $sizes = strtolower($link->getAttribute('sizes'));
+                    if (str_contains($sizes, 'x')) {
+                        $size = intval(explode('x', $sizes)[0]);
+                    }
+                }
+                if (str_contains($rel, 'apple')) $size += 1000;
+                if (str_ends_with(strtolower($favicon_url), '.svg')) $size += 2000;
+
+                $favicon_candidates[] = ['url' => $favicon_url, 'size' => $size];
             }
         }
     }
-    if (empty($favicon_path)) {
-        $ico_url = $domain . '/favicon.ico';
-        $headers = @get_headers($ico_url);
-        if ($headers && strpos($headers[0], '200')) {
-            $favicon_path = $ico_url;
-        }
-    }
-    if (!empty($favicon_path)) {
+
+    $favicon_candidates[] = ['url' => rtrim($final_base_url, '/') . '/favicon.ico', 'size' => 1];
+
+    if (empty($favicon_candidates)) return $default_favicon;
+
+    usort($favicon_candidates, function($a, $b) {
+        return $b['size'] <=> $a['size'];
+    });
+
+    foreach ($favicon_candidates as $candidate) {
+        $favicon_path = $candidate['url'];
+        if (empty($favicon_path)) continue;
+
+        $context = stream_context_create(['http' => ['user_agent' => 'Nisaba Favicon Fetcher/1.0', 'timeout' => 10]]);
         $favicon_data = @file_get_contents($favicon_path, false, $context);
+
         if ($favicon_data) {
-            $filename = hash('md5', $url) . '_' . basename(parse_url($favicon_path, PHP_URL_PATH));
+            $path_parts = parse_url($favicon_path, PHP_URL_PATH);
+            $basename = basename($path_parts);
+            if (empty($basename) || !pathinfo($basename, PATHINFO_EXTENSION)) {
+                 $finfo = new finfo(FILEINFO_MIME_TYPE);
+                 $mime_type = $finfo->buffer($favicon_data);
+                 $ext = match($mime_type) {
+                    'image/svg+xml' => '.svg',
+                    'image/png' => '.png',
+                    'image/jpeg' => '.jpg',
+                    'image/gif' => '.gif',
+                    'image/x-icon', 'image/vnd.microsoft.icon' => '.ico',
+                    default => ''
+                 };
+                 $basename = 'favicon' . $ext;
+            }
+
+            $filename = hash('md5', $feed_url) . '_' . $basename;
             $save_path = FAVICON_DIR . '/' . $filename;
             if (file_put_contents($save_path, $favicon_data)) {
                 return 'data/favicons/' . $filename;
             }
         }
     }
+
     return $default_favicon;
 }
 
@@ -234,49 +330,67 @@ function generate_notes_rss($xml_data, $xml_notes, $username) {
     $rss->asXML(__DIR__ . '/notas.xml');
 }
 
-function format_summary_for_rss($summary_text) {
+function format_summary_for_rss($summary_text, $title_to_guid_map = []) {
     $lines = explode("\n", $summary_text);
     $html = '';
+    $next_line_is_original_title = false;
+
     foreach ($lines as $line) {
         $line = trim($line);
 
-        if ($line === '---') {
-            $html .= "<hr>\n";
+        if ($next_line_is_original_title && !empty($line)) {
+            $summary_title = trim($line);
+            $summary_title_clean = str_replace(['{{', '}}'], '', $summary_title);
+            $best_match_guid = null;
+            
+            foreach ($title_to_guid_map as $original_title => $guid) {
+                if (stripos($original_title, $summary_title_clean) !== false || stripos($summary_title_clean, $original_title) !== false) {
+                    $best_match_guid = $guid;
+                    break;
+                }
+            }
+
+            if ($best_match_guid) {
+                $html .= '<h4><a href="?article_guid=' . urlencode($best_match_guid) . '" style="color: #ffae42;">' . htmlspecialchars($summary_title_clean) . '</a></h4>' . "\n";
+            } else {
+                $html .= '<h4>' . htmlspecialchars($summary_title_clean) . '</h4>' . "\n";
+            }
+            
+            $next_line_is_original_title = false;
             continue;
         }
+
         if (empty($line)) continue;
+        if ($line === '---') {
+            $html .= "<hr>\n";
+            $next_line_is_original_title = false;
+            continue;
+        }
 
         if (str_starts_with($line, '###')) {
-            $level = 3;
             $content = substr($line, 3);
+            $html .= "<h3>" . htmlspecialchars(trim($content)) . "</h3>\n";
+            $next_line_is_original_title = true;
         } elseif (str_starts_with($line, '##')) {
-            $level = 2;
             $content = substr($line, 2);
+            $html .= "<h2>" . htmlspecialchars(trim($content)) . "</h2>\n";
+            $next_line_is_original_title = false;
         } elseif (str_starts_with($line, '#')) {
-            $level = 1;
             $content = substr($line, 1);
+            $html .= "<h1>" . htmlspecialchars(trim($content)) . "</h1>\n";
+            $next_line_is_original_title = false;
         } else {
-            $level = 0;
-            $content = $line;
-        }
-        
-        $content = trim($content);
-
-        // Process bold
-        $parts = preg_split('/(\*\*.*?\*\*)/s', $content, -1, PREG_SPLIT_DELIM_CAPTURE);
-        $processed_content = '';
-        foreach ($parts as $part) {
-            if (str_starts_with($part, '**') && str_ends_with($part, '**')) {
-                $processed_content .= '<strong>' . htmlspecialchars(substr($part, 2, -2)) . '</strong>';
-            } else {
-                $processed_content .= htmlspecialchars($part);
+            $parts = preg_split('/(\*\*.*?\*\*)/s', $line, -1, PREG_SPLIT_DELIM_CAPTURE);
+            $processed_content = '';
+            foreach ($parts as $part) {
+                if (str_starts_with($part, '**') && str_ends_with($part, '**')) {
+                    $processed_content .= '<strong>' . htmlspecialchars(substr($part, 2, -2)) . '</strong>';
+                } else {
+                    $processed_content .= htmlspecialchars($part);
+                }
             }
-        }
-
-        if ($level > 0) {
-            $html .= "<h$level>$processed_content</h$level>\n";
-        } else {
             $html .= "<p>$processed_content</p>\n";
+            $next_line_is_original_title = false;
         }
     }
     return $html;
@@ -336,7 +450,14 @@ function generate_analysis_rss($xml_data, $xml_summaries, $username) {
             $description = 'Análisis de ' . htmlspecialchars($folder_name) . ' el ' . date('d/m/Y', $timestamp) . ' a las ' . date('H:i', $timestamp) . ' desde el Nisaba de ' . htmlspecialchars($owner_name);
             $item->addChild('description', $description);
 
-            $formatted_content = format_summary_for_rss((string)$summary);
+            $summary_text = isset($summary->text) ? (string)$summary->text : (string)$summary;
+            $title_to_guid_map = [];
+            if (isset($summary->title_map)) {
+                foreach ($summary->title_map->map as $map) {
+                    $title_to_guid_map[(string)$map['title']] = (string)$map['guid'];
+                }
+            }
+            $formatted_content = format_summary_for_rss($summary_text, $title_to_guid_map);
             
             $content_node = $item->addChild('encoded', '', 'http://purl.org/rss/1.0/modules/content/');
             $content_node_dom = dom_import_simplexml($content_node);
@@ -2348,13 +2469,16 @@ $current_feed = $_GET['feed'] ?? '';
                             foreach ($xml_feeds->folder as $folder) {
                                 $folder_name = (string)$folder['name'];
                                 $content_for_folder = '';
+                                $title_to_guid_map = [];
                                 foreach ($folder->feed as $feed) {
                                     $feed_url = (string)$feed['url'];
                                     $unread_articles = $cache_xml->xpath('//item[read="0" and feed_url="' . $feed_url . '"]');
                                     foreach ($unread_articles as $item) {
                                         $title = $item->title_original;
                                         $content = $item->content_original;
+                                        $guid = (string)$item->guid;
                                         $content_for_folder .= "Título: " . $title . "\nContenido: " . strip_tags($content) . "\n---\n";
+                                        $title_to_guid_map[normalize_feed_text((string)$title)] = $guid;
                                     }
                                 }
 
@@ -2371,7 +2495,13 @@ $current_feed = $_GET['feed'] ?? '';
                                     }
 
                                     if ($existing_summary) {
-                                        $summary_text = (string)$existing_summary;
+                                        $summary_text = isset($existing_summary->text) ? (string)$existing_summary->text : (string)$existing_summary;
+                                        $title_to_guid_map = [];
+                                        if (isset($existing_summary->title_map)) {
+                                            foreach ($existing_summary->title_map->map as $map) {
+                                                $title_to_guid_map[(string)$map['title']] = (string)$map['guid'];
+                                            }
+                                        }
                                     } else {
                                         $summary_text = get_gemini_summary($content_for_folder, $gemini_api_key, $gemini_model, $gemini_prompt);
                                         if (!str_starts_with($summary_text, 'Error')) {
@@ -2383,7 +2513,15 @@ $current_feed = $_GET['feed'] ?? '';
                                                 unset($oldest_summary[0]);
                                             }
 
-                                            $new_summary = $xml_summaries->addChild('summary', $summary_text);
+                                            $new_summary = $xml_summaries->addChild('summary');
+                                            addChildWithCDATA($new_summary, 'text', $summary_text);
+                                            $title_map_node = $new_summary->addChild('title_map');
+                                            foreach ($title_to_guid_map as $title => $guid) {
+                                                $map = $title_map_node->addChild('map');
+                                                $map->addAttribute('title', $title);
+                                                $map->addAttribute('guid', $guid);
+                                            }
+
                                             $new_summary->addAttribute('folder', $folder_name);
                                             if (!empty($current_update_id)) {
                                                 $new_summary->addAttribute('update_id', $current_update_id);
@@ -2398,7 +2536,7 @@ $current_feed = $_GET['feed'] ?? '';
                                     echo '<div class="summary-container">';
                                     echo '<button class="copy-btn" onclick="copySummary(this)">Copiar</button>';
                                     echo '<div class="summary-box" style="background-color: #2d2d2d; color: #33ff33; border: 1px solid #444; border-radius: 8px; padding: 1.5em; font-family: \'VT323\', monospace; white-space: pre-wrap; overflow-x: auto; margin-top: 0; font-size: 22px;">';
-                                    echo format_summary_for_rss($summary_text);
+                                    echo format_summary_for_rss($summary_text, $title_to_guid_map);
                                     echo '</div>';
 
                                     $note_guid = 'summary_' . md5($folder_name . $current_update_id);
@@ -2420,6 +2558,50 @@ $current_feed = $_GET['feed'] ?? '';
                                     echo '</form>';
 
                                     echo '<hr>';
+                                } else {
+                                    $summaries_for_folder = $xml_summaries->xpath('//summary[@folder="' . htmlspecialchars($folder_name) . '"]');
+                                    if (!empty($summaries_for_folder)) {
+                                        $has_any_unread = true; // Mark as having content to show
+                                        usort($summaries_for_folder, function($a, $b) {
+                                            return strtotime((string)$b['date']) - strtotime((string)$a['date']);
+                                        });
+                                        $latest_summary = $summaries_for_folder[0];
+                                        
+                                        $summary_text = isset($latest_summary->text) ? (string)$latest_summary->text : (string)$latest_summary;
+                                        $title_to_guid_map = [];
+                                        if (isset($latest_summary->title_map)) {
+                                            foreach ($latest_summary->title_map->map as $map) {
+                                                $title_to_guid_map[(string)$map['title']] = (string)$map['guid'];
+                                            }
+                                        }
+
+                                        echo '<h3>' . htmlspecialchars($folder_name) . ' <small class="text-muted">(Último análisis)</small></h3>';
+                                        echo '<div class="summary-container">';
+                                        echo '<button class="copy-btn" onclick="copySummary(this)">Copiar</button>';
+                                        echo '<div class="summary-box" style="background-color: #2d2d2d; color: #33ff33; border: 1px solid #444; border-radius: 8px; padding: 1.5em; font-family: \'VT323\', monospace; white-space: pre-wrap; overflow-x: auto; margin-top: 0; font-size: 22px;">';
+                                        echo format_summary_for_rss($summary_text, $title_to_guid_map);
+                                        echo '</div>';
+
+                                        $note_guid = 'summary_' . md5($folder_name . (string)$latest_summary['update_id']);
+                                        $note_title = "Análisis de la carpeta: " . htmlspecialchars($folder_name);
+                                        $note_link = "nisaba.php?view=nisaba_summary";
+                                        $note_text = '';
+                                        $notes = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($note_guid) . '"]');
+                                        if (!empty($notes)) $note_text = (string)$notes[0]->content;
+
+                                        echo '<form method="POST" action="nisaba.php?view=nisaba_summary" class="note-form" style="margin-top: 1em;">';
+                                        echo '    <input type="hidden" name="article_guid" value="' . htmlspecialchars($note_guid) . '">';
+                                        echo '    <input type="hidden" name="article_title" value="' . htmlspecialchars($note_title) . '">';
+                                        echo '    <input type="hidden" name="article_link" value="' . htmlspecialchars($note_link) . '">';
+                                        echo '    <input type="hidden" name="return_url" value="' . htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'nisaba.php?view=nisaba_summary') . '">';
+                                        echo '    <div class="form-group">';
+                                        echo '        <textarea name="note_content" class="postit-textarea" placeholder="Escribe una nota sobre este análisis...">' . htmlspecialchars($note_text) . '</textarea>';
+                                        echo '    </div>';
+                                        echo '    <button type="submit" name="save_note" class="btn btn-primary btn-sm">Guardar Nota</button>';
+                                        echo '</form>';
+
+                                        echo '<hr>';
+                                    }
                                 }
                             }
                         }
