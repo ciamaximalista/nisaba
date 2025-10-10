@@ -2,7 +2,7 @@
 
 # Lector de Feeds para el siglo XXI
 
-Con la ayuda de IA de última generación Nisaba te ayudará a **leer las noticias de una manera diferente**, asistido por un analista profesional. Carga fuentes de todo el mundo, actualízalas y pulsa el botón de «Análisis»., Obtendrás una selección de las noticias que realmente importan: las que muestran innovaciones disruptivas, cambios emergentes que pueden consolidarse en el futuro o nuevas perspectivas de ver las cosas. Todo  lo que potencialmente podría davvr forma a los futuros que vienen.
+Con la ayuda de IA de última generación Nisaba te ayudará a **leer las noticias de una manera diferente**, asistido por un analista profesional. Carga fuentes de todo el mundo, actualízalas y pulsa el botón de «Análisis»., Obtendrás una selección de las noticias que realmente importan: las que muestran innovaciones disruptivas, cambios emergentes que pueden consolidarse en el futuro o nuevas perspectivas de ver las cosas. Todo  lo que potencialmente podría dar forma a los futuros que vienen.
 
 Configurado por defecto para analizar la situación global, Nisaba puede personalizarse fácilmente para cualquier sector, actividad o tema de tu interés.
 
