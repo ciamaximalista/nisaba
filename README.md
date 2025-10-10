@@ -1,12 +1,10 @@
-![Nisaba](nisaba-banner.png)
+![++](nisaba-banner.png)
 
 # Lector de Feeds para el siglo XXI
 
-Con la ayuda de IA de última generación, Nisaba te ayudará a **leer las noticias de una manera diferente**, al modo de un analista profesional. Nisaba te dará en un párrafo el marco apasionante del gran juego estratégico que da sentido al escenario geopolítico, económico, tecnológico y cultural. Luego lo relacionará con las **innovaciones y cambios disruptivos** que podrían convertirse en nuevas tendencias y cambios globales en breve. Y finalmente te lo justificará señalándote los artículos en los que se basa y por qué.
+Con la ayuda de IA de última generación Nisaba te ayudará a **leer las noticias de una manera diferente**, asistido por un analista profesional. Carga fuentes de todo el mundo, actualízalas y pulsa el botón de «Análisis»., Obtendrás una selección de las noticias que realmente importan: las que muestran innovaciones disruptivas, cambios emergentes que pueden consolidarse en el futuro o nuevas perspectivas de ver las cosas. Todo  lo que potencialmente podría davvr forma a los futuros que vienen.
 
-Elige tus fuentes y agrega los medios de todo el mundo que más confianza te den. No te preocupes por el idioma, Nisaba está diseñado para integrarse con la función de traducción nativa de tu navegador (Chrome, Firefox, etc.). 
-
-Y recuerda: todo lo que la IA te presentará en sus informes está en las noticias con que la alimentas, sólo te muestra lo que el ruido no deja escuchar ni entender. Verás que la realidad global es mucho más apasionante que las banderías, las *fake news* y las *conspiranoias*.
+Configurado por defecto para analizar la situación global, Nisaba puede personalizarse fácilmente para cualquier sector, actividad o tema de tu interés.
 
 ## ¿Cómo usar Nisaba para descubrir sus posibilidades?
 
