@@ -85,17 +85,14 @@ if (empty($followed_sources)) {
                     
                     if (trim($content_encoded) !== '') {
 
-                        // Get the list of feeds the current user follows
-                        $user_feed_hosts = [];
-                        if (isset($xml_data->feeds->feed)) {
-                            foreach ($xml_data->feeds->feed as $feed) {
-                                $feed_host = parse_url((string)$feed->url, PHP_URL_HOST);
-                                if ($feed_host) {
-                                    $user_feed_hosts[] = str_replace('www.', '', $feed_host);
-                                }
-                            }
+                        // Load the current user's article cache
+                        $currentUserCacheFile = DATA_DIR . '/' . $_SESSION['username'] . '_cache.xml';
+                        $user_cache_xml = null;
+                        if (file_exists($currentUserCacheFile)) {
+                            libxml_use_internal_errors(true);
+                            $user_cache_xml = simplexml_load_file($currentUserCacheFile);
+                            libxml_clear_errors();
                         }
-                        $user_feed_hosts = array_unique($user_feed_hosts);
 
                         $dom = new DOMDocument();
                         // Use @ to suppress warnings from invalid HTML in the content
@@ -106,21 +103,20 @@ if (empty($followed_sources)) {
                             $href = $link->getAttribute('href');
                             if (strpos($href, '?article_guid=') === 0) {
                                 $guid_url = urldecode(substr($href, strlen('?article_guid=')));
-                                $article_host = parse_url($guid_url, PHP_URL_HOST);
-                                if ($article_host) {
-                                    $article_host = str_replace('www.', '', $article_host);
-                                    $is_followed = false;
-                                    foreach ($user_feed_hosts as $feed_host) {
-                                        if (strcasecmp($article_host, $feed_host) === 0) {
-                                            $is_followed = true;
-                                            break;
-                                        }
+                                
+                                $article_in_cache = false;
+                                if ($user_cache_xml) {
+                                    // Search for the guid in the user's cache
+                                    $query = '//item[guid="' . htmlspecialchars($guid_url) . '"]';
+                                    $result = $user_cache_xml->xpath($query);
+                                    if (!empty($result)) {
+                                        $article_in_cache = true;
                                     }
+                                }
 
-                                    if (!$is_followed) {
-                                        $link->setAttribute('href', $guid_url);
-                                        $link->setAttribute('target', '_blank'); // Good practice for external links
-                                    }
+                                if (!$article_in_cache) {
+                                    $link->setAttribute('href', $guid_url);
+                                    $link->setAttribute('target', '_blank');
                                 }
                             }
                         }
