@@ -2,20 +2,24 @@
 
 # Lector de Feeds para el siglo XXI
 
-Con la ayuda de IA de última generación Nisaba te ayudará a **leer las noticias de una manera diferente**, asistido por un analista profesional. Carga fuentes de todo el mundo, actualízalas y pulsa el botón de «Análisis»., Obtendrás una selección de las noticias que realmente importan: las que muestran innovaciones disruptivas, cambios emergentes que pueden consolidarse en el futuro o nuevas perspectivas de ver las cosas. Todo  lo que potencialmente podría dar forma a los futuros que vienen.
+Con la ayuda de IA de última generación Nisaba te ayudará a **leer grandes volúmenes de noticias de una manera diferente**, asistido por una IA que emula a un analista profesional. Carga fuentes de todo el mundo, actualízalas y pulsa el botón de «Análisis». Obtendrás una selección de las noticias que realmente importan: las que muestran innovaciones disruptivas, cambios emergentes que pueden consolidarse en el futuro o nuevas perspectivas de ver las cosas. Todo  lo que potencialmente podría dar forma a los futuros que vienen.
 
-Configurado por defecto para analizar la situación global, Nisaba puede personalizarse fácilmente para cualquier sector, actividad o tema de tu interés.
+Configurado por defecto para analizar la situación global, Nisaba puede personalizarse fácilmente para localizar las tendencias emergentes en cualquier sector, actividad o tema de tu interés. Se creó originalmente para  que pequeñas empresas, cooperativas, ONGs e instituciones del rural extremeño ganaran perspectiva internacional y pudieran participar en pie de igualdad en nuevos ámbitos de la escena europea e iberoamericana.
 
 ## ¿Cómo usar Nisaba para descubrir sus posibilidades?
 
-1. Tras configurar la app, sube  feeds (fuentes RSS o Atom) de periodicos y revistas de todo el mundo, no te preocupes por el idioma y ponlas en una misma carpeta, llámala por ejemplo «Noticias».
+1. Tras configurar la app, sube  feeds (fuentes RSS o Atom) de periodicos y revistas de todo el mundo, no te preocupes por el idioma y ordénalas por carpetas.
 2. Actualiza las feeds pulsando el botón de arriba a la izquierda. Si has puesto muchas puede tardar un rato en bajarlas todas.
-3. Pulsa el botón «Análisis. Te aparecerá, por cada carpeta de fuentes que hayas añadido, un informe de análisis como los que elaboran los principales *think tanks* del mundo. Cada uno tiene un botón en la esquina superior derecha para que lo copies y lo guardes como quieras.
-4. Lee las noticias. Nisaba se integra con la función de traducción de tu navegador.
+3. Pulsa el botón «Análisis». Te aparecerá, por cada carpeta de fuentes que hayas añadido, un informe de análisis como los que elaboran los principales *think tanks* y consultoras de riesgo político del mundo. Cada uno tiene un botón en la esquina superior derecha para que lo copies y lo guardes como quieras. También se generará un RSS en el directorio en el que hayas instalado Nisaba llamado analisis.xml para que puedas integrarlo con otros programas.
+4. Nisaba no sólo te dice  qué ha detectado, sino que enlaza los artículos que le han llevado a esa conclusión. Puedes pinchar en ellos desde el análisis y leerlos tranquilamente.
+5. Lee las noticias en español. Nisaba se integra con la función de traducción de tu navegador.
    - Al ver una lista de noticias en varios idiomas, el navegador debería detectar el contenido mixto y ofrecerte traducirlo.
    - Al abrir un artículo en otro idioma, el navegador debería ofrecerte la traducción automáticamente.
    - **Si la ventana emergente de traducción no aparece** o la cierras por error, simplemente haz clic con el **botón derecho del ratón** en cualquier parte de la página y selecciona **"Traducir al español"** (o tu idioma).
    - *Consejo para Chrome/Edge*: Si el navegador se equivoca de idioma (ej. dice "inglés" pero hay varios), en la misma ventana emergente de traducción, haz clic en los tres puntos, elige "Elegir otro idioma" y selecciona "Idioma detectado" en el menú desplegable superior.
+6. Toma notas en los artículos. Verás como al hacerlo se actualizan los post-it de tu escritorio. Si pinchas sobre  ellos, podras editarlas, por ejemplo para ponerles un título distinto al original, y publicarlas como mensajes en Telegram para alimentar tu canal de noticias.
+7. Sigue a otros usuarios de Nisaba para ver qué análisis se han generado a partir de sus fuentes y que notas han escrito.
+8. Usa el buscador para encontrar artículos de tu lista de feeds que hayas descargado durante los últimos meses.  Puedes aumentar o reducir la duración del caché de artículos en «Configuración». 
 
 ## Funcionalidades Principales
 
@@ -29,9 +33,9 @@ Configurado por defecto para analizar la situación global, Nisaba puede persona
 - **Análisis con IA**: Utiliza la API de Google Gemini para generar análisis estratégicos y encontrar elementos  disruptivos y cambios de tendencias en tus artículos no leídos, agrupados por carpeta.
 - **Notas Personales**: Toma notas sobre cualquier artículo o resumen. Tus notas se guardan y son accesibles en cualquier momento.
 - **Enviar tus notas a Telegram**: Puedes compartir tus notas y los enlaces que comentan en un grupo o canal de Telegram con tan sólo pulsar un botón.
-- **Recibir Notas**: Puedes suscribirte a las notas de otros usuarios para leer y analizar en equipo.
+- **Recibir Notas y Análisis**: Puedes suscribirte a las notas de otros usuarios para leer y analizar en equipo.
 - **Feed de Notas**: Todas tus notas están disponibles a través de un feed RSS propio (`notas.xml`), permitiéndote que otros se suscriban a tus ideas y comentarios.
-- **Feed de Análisis**: Todos los informes generados por la IA están disponibles en un nuevo feed RSS (`analisis.xml`). Esto te permite suscribirte a tus propios análisis desde otro lector de feeds o compartir tus hallazgos fácilmente.
+- **Feed de Análisis**: Todos los informes generados por la IA están disponibles en un nuevo feed RSS (`analisis.xml`). Esto permite que puedas seguir los análisis hechos por miembros de tu equipo.
 - **Interfaz Sencilla**: Una interfaz de usuario limpia y adaptable, centrada en la legibilidad.
 
 ## Instalación y Configuración
@@ -100,8 +104,6 @@ Esta API te permite usar la función "Análisis" para obtener resúmenes estrat�
     - En la página de configuración de Nisaba, pega la clave en el campo "API Key de Google Gemini".
     - Selecciona el modelo de Gemini que prefieras (por ejemplo, `gemini-1.5-pro-latest`).
     - Opcionalmente, puedes personalizar el *prompt* que se usa para generar los análisis para adaptarlo a tus intereses.
-
-
 
 3.  **Guarda la Configuración**:
     - Haz clic en el botón "Guardar Configuración" al final de la página.
