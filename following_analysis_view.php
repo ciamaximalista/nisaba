@@ -84,9 +84,53 @@ if (empty($followed_sources)) {
                     echo '<div class="summary-container" style="margin-top: 1em;">';
                     
                     if (trim($content_encoded) !== '') {
+
+                        // Get the list of feeds the current user follows
+                        $user_feed_hosts = [];
+                        if (isset($xml_data->feeds->feed)) {
+                            foreach ($xml_data->feeds->feed as $feed) {
+                                $feed_host = parse_url((string)$feed->url, PHP_URL_HOST);
+                                if ($feed_host) {
+                                    $user_feed_hosts[] = str_replace('www.', '', $feed_host);
+                                }
+                            }
+                        }
+                        $user_feed_hosts = array_unique($user_feed_hosts);
+
+                        $dom = new DOMDocument();
+                        // Use @ to suppress warnings from invalid HTML in the content
+                        @$dom->loadHTML('<?xml encoding="UTF-8">' . $content_encoded, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+
+                        $links = $dom->getElementsByTagName('a');
+                        foreach ($links as $link) {
+                            $href = $link->getAttribute('href');
+                            if (strpos($href, '?article_guid=') === 0) {
+                                $guid_url = urldecode(substr($href, strlen('?article_guid=')));
+                                $article_host = parse_url($guid_url, PHP_URL_HOST);
+                                if ($article_host) {
+                                    $article_host = str_replace('www.', '', $article_host);
+                                    $is_followed = false;
+                                    foreach ($user_feed_hosts as $feed_host) {
+                                        if (strcasecmp($article_host, $feed_host) === 0) {
+                                            $is_followed = true;
+                                            break;
+                                        }
+                                    }
+
+                                    if (!$is_followed) {
+                                        $link->setAttribute('href', $guid_url);
+                                        $link->setAttribute('target', '_blank'); // Good practice for external links
+                                    }
+                                }
+                            }
+                        }
+                        $modified_content = $dom->saveHTML();
+                        // remove the automatically added XML declaration
+                        $modified_content = trim(str_replace('<?xml encoding="UTF-8">', '', $modified_content));
+
                         echo '<button class="copy-btn" onclick="copySummary(this)">Copiar</button>';
                         echo '<div class="summary-box" style="background-color: #2d2d2d; color: #33ff33; border: 1px solid #444; border-radius: 8px; padding: 1.5em; font-family: \'VT323\', monospace; white-space: pre-wrap; overflow-x: auto; margin-top: 0; font-size: 22px;">';
-                        echo $content_encoded; // Echo HTML content directly
+                        echo $modified_content; // Echo HTML content directly
                         echo '</div>';
                     } else {
                         echo '<p>' . htmlspecialchars((string)$item->description) . '</p>';
