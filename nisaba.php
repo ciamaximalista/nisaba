@@ -333,53 +333,72 @@ function generate_notes_rss($xml_data, $xml_notes, $username) {
 function format_summary_for_rss($summary_text, $title_to_guid_map = []) {
     $lines = explode("\n", $summary_text);
     $html = '';
-    $next_line_is_original_title = false;
+    $state = 'normal'; // normal, processing_titles, after_titles
 
     foreach ($lines as $line) {
         $line = trim($line);
 
-        if ($next_line_is_original_title && !empty($line)) {
-            $summary_title = trim($line);
-            $summary_title_clean = str_replace(['{{', '}}'], '', $summary_title);
-            $best_match_guid = null;
-            
-            foreach ($title_to_guid_map as $original_title => $guid) {
-                if (stripos($original_title, $summary_title_clean) !== false || stripos($summary_title_clean, $original_title) !== false) {
-                    $best_match_guid = $guid;
-                    break;
-                }
-            }
+        if (empty($line)) continue;
 
-            if ($best_match_guid) {
-                $html .= '<h4><a href="?article_guid=' . urlencode($best_match_guid) . '" style="color: #ffae42;">' . htmlspecialchars($summary_title_clean) . '</a></h4>' . "\n";
-            } else {
-                $html .= '<h4>' . htmlspecialchars($summary_title_clean) . '</h4>' . "\n";
-            }
-            
-            $next_line_is_original_title = false;
+        if ($line === '---') {
+            $html .= "<hr>\n";
+            $state = 'normal';
             continue;
         }
 
-        if (empty($line)) continue;
-        if ($line === '---') {
-            $html .= "<hr>\n";
-            $next_line_is_original_title = false;
-            continue;
+        if ($state === 'processing_titles') {
+            if (str_starts_with($line, 'Síntesis de Impacto:')) {
+                $state = 'after_titles';
+                // Fall through to the 'after_titles' state logic
+            } else {
+                // This line contains one or more titles
+                $potential_titles = preg_split('/\s*\/\s*|(?<=}})\s*(?={{)/', $line);
+                foreach ($potential_titles as $potential_title) {
+                    if (empty(trim($potential_title))) continue;
+
+                    $summary_title_clean = str_replace(['{{', '}}', 'Título:'], '', $potential_title);
+                    $summary_title_clean = trim($summary_title_clean);
+                    
+                    if (empty($summary_title_clean)) continue;
+
+                    $best_match_guid = null;
+                    $best_match_score = 0;
+
+                    foreach ($title_to_guid_map as $original_title => $guid) {
+                        $score = 0;
+                        if (stripos($original_title, $summary_title_clean) !== false) $score++;
+                        if (stripos($summary_title_clean, $original_title) !== false) $score++;
+                        
+                        if ($score > $best_match_score) {
+                            $best_match_guid = $guid;
+                            $best_match_score = $score;
+                        }
+                        if ($score === 2) break; 
+                    }
+
+                    if ($best_match_guid) {
+                        $html .= '<h4><a href="?article_guid=' . urlencode($best_match_guid) . '" style="color: #ffae42;">' . htmlspecialchars($summary_title_clean) . '</a></h4>' . "\n";
+                    } else {
+                        $html .= '<h4>' . htmlspecialchars($summary_title_clean) . '</h4>' . "\n";
+                    }
+                }
+                continue; // Continue to the next line after processing titles
+            }
         }
 
         if (str_starts_with($line, '###')) {
             $content = substr($line, 3);
             $html .= "<h3>" . htmlspecialchars(trim($content)) . "</h3>\n";
-            $next_line_is_original_title = true;
+            $state = 'processing_titles';
         } elseif (str_starts_with($line, '##')) {
             $content = substr($line, 2);
             $html .= "<h2>" . htmlspecialchars(trim($content)) . "</h2>\n";
-            $next_line_is_original_title = false;
+            $state = 'normal';
         } elseif (str_starts_with($line, '#')) {
             $content = substr($line, 1);
             $html .= "<h1>" . htmlspecialchars(trim($content)) . "</h1>\n";
-            $next_line_is_original_title = false;
-        } else {
+            $state = 'normal';
+        } else { // Handles 'after_titles' state and normal paragraphs
             $parts = preg_split('/(\*\*.*?\*\*)/s', $line, -1, PREG_SPLIT_DELIM_CAPTURE);
             $processed_content = '';
             foreach ($parts as $part) {
@@ -390,7 +409,6 @@ function format_summary_for_rss($summary_text, $title_to_guid_map = []) {
                 }
             }
             $html .= "<p>$processed_content</p>\n";
-            $next_line_is_original_title = false;
         }
     }
     return $html;
