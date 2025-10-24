@@ -383,7 +383,7 @@ function format_summary_for_rss($summary_text, $title_to_guid_map = []) {
                     $best_match_guid = null;
                     $best_match_score = 0;
                     $is_truncated = str_ends_with($summary_title_clean, '...');
-                    $truncated_search_term = $is_truncated ? rtrim($summary_title_clean, '...') : '';
+                    $truncated_search_term = $is_truncated ? substr($summary_title_clean, 0, -3) : '';
 
                     foreach ($title_to_guid_map as $original_title => $guid) {
                         $score = 0;
