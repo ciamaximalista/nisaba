@@ -347,33 +347,65 @@ function format_summary_for_rss($summary_text, $title_to_guid_map = []) {
         }
 
         if ($state === 'processing_titles') {
-            if (str_starts_with($line, 'Síntesis de Impacto:')) {
+            // Robustly check for section markers, ignoring bold markdown.
+            if (preg_match('/^\*?\*?(Síntesis de Impacto|Explicación de la Señal)/u', $line)) {
                 $state = 'after_titles';
-                // Fall through to the 'after_titles' state logic
+                // Fall through to the generic paragraph handler below.
             } else {
-                // This line contains one or more titles
-                $potential_titles = preg_split('/\s*\/\s*|(?<=}})\s*(?={{)/', $line);
+                // This line is a title or a list of titles.
+                $potential_titles = [];
+                // Case 1: Titles are wrapped in * and separated by commas.
+                if (str_contains($line, '*') && str_contains($line, ',')) {
+                    preg_match_all('/\*(.*?)\*/u', $line, $matches);
+                    if (!empty($matches[1])) {
+                        $potential_titles = $matches[1];
+                    }
+                } 
+
+                // Case 2: Titles are wrapped in {{...}}.
+                if (empty($potential_titles) && str_contains($line, '{{')) {
+                    $potential_titles = preg_split('/\s*\/\s*|(?<=}})\s*(?={{)/', $line);
+                }
+
+                // Case 3: The entire line is a single title (fallback).
+                if (empty($potential_titles)) {
+                    $potential_titles = [$line];
+                }
+
                 foreach ($potential_titles as $potential_title) {
                     if (empty(trim($potential_title))) continue;
 
-                    $summary_title_clean = str_replace(['{{', '}}', 'Título:'], '', $potential_title);
+                    $summary_title_clean = str_replace(['{{', '}}', 'Título:', '*'], '', $potential_title);
                     $summary_title_clean = trim($summary_title_clean);
-                    
+
                     if (empty($summary_title_clean)) continue;
 
                     $best_match_guid = null;
                     $best_match_score = 0;
+                    $is_truncated = str_ends_with($summary_title_clean, '...');
+                    $truncated_search_term = $is_truncated ? rtrim($summary_title_clean, '...') : '';
 
                     foreach ($title_to_guid_map as $original_title => $guid) {
                         $score = 0;
-                        if (stripos($original_title, $summary_title_clean) !== false) $score++;
-                        if (stripos($summary_title_clean, $original_title) !== false) $score++;
+                        // Exact match (highest priority)
+                        if (strcasecmp($original_title, $summary_title_clean) === 0) {
+                            $score = 100;
+                        }
+                        // Truncated match
+                        elseif ($is_truncated && !empty($truncated_search_term) && str_starts_with(strtolower($original_title), strtolower($truncated_search_term))) {
+                            $score = 90;
+                        }
+                        // Substring match (lower priority)
+                        else {
+                            if (stripos($original_title, $summary_title_clean) !== false) $score += 10;
+                            if (stripos($summary_title_clean, $original_title) !== false) $score += 10;
+                        }
                         
                         if ($score > $best_match_score) {
                             $best_match_guid = $guid;
                             $best_match_score = $score;
                         }
-                        if ($score === 2) break; 
+                        if ($score >= 90) break; // Stop if we have a very confident match
                     }
 
                     if ($best_match_guid) {
