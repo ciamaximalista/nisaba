@@ -2765,7 +2765,7 @@ $current_feed = $_GET['feed'] ?? '';
                         <form method="POST" action="nisaba.php" class="note-form">
                             <input type="hidden" name="article_guid" value="<?php echo htmlspecialchars($article->guid); ?>">
                             <input type="hidden" name="article_title" value="<?php echo htmlspecialchars($article_title); ?>">
-                            <input type="hidden" name="article_link" value="<?php echo htmlspecialchars($article->link); ?>">
+                            <input type="hidden" name="article_link" value="<?php echo htmlspecialchars($article_link); ?>">
                             <input type="hidden" name="return_url" value="<?php echo htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'nisaba.php?article_guid=' . urlencode($article->guid)); ?>">
                             <div class="form-group">
                                 <?php
