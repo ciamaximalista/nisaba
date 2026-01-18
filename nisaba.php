@@ -1198,6 +1198,50 @@ if (isset($_SESSION['username'])) {
         exit;
     }
 
+    if (isset($_GET['action']) && $_GET['action'] === 'move_folder' && isset($_GET['name'], $_GET['dir'])) {
+        $folder_name = trim((string)$_GET['name']);
+        $direction = strtolower(trim((string)$_GET['dir']));
+        if ($folder_name !== '' && in_array($direction, ['up', 'down'], true)) {
+            $folders = $xml_feeds->folder;
+            $folder_count = $folders ? count($folders) : 0;
+            if ($folder_count > 1) {
+                $current_index = null;
+                for ($i = 0; $i < $folder_count; $i++) {
+                    if ((string)$folders[$i]['name'] === $folder_name) {
+                        $current_index = $i;
+                        break;
+                    }
+                }
+
+                if ($current_index !== null) {
+                    if ($direction === 'up' && $current_index > 0) {
+                        $dom_folder = dom_import_simplexml($folders[$current_index]);
+                        $dom_target = dom_import_simplexml($folders[$current_index - 1]);
+                        if ($dom_folder && $dom_target && $dom_target->parentNode) {
+                            $dom_target->parentNode->insertBefore($dom_folder, $dom_target);
+                        }
+                        $xml_feeds->asXML($feedsFile);
+                    } elseif ($direction === 'down' && $current_index < ($folder_count - 1)) {
+                        $dom_folder = dom_import_simplexml($folders[$current_index]);
+                        $dom_target = dom_import_simplexml($folders[$current_index + 1]);
+                        if ($dom_folder && $dom_target && $dom_target->parentNode) {
+                            if ($dom_target->nextSibling) {
+                                $dom_target->parentNode->insertBefore($dom_folder, $dom_target->nextSibling);
+                            } else {
+                                $dom_target->parentNode->appendChild($dom_folder);
+                            }
+                        }
+                        $xml_feeds->asXML($feedsFile);
+                    }
+                }
+            }
+        }
+
+        $return_url = $_GET['return_url'] ?? 'nisaba.php?view=all_feeds';
+        header('Location: ' . $return_url);
+        exit;
+    }
+
     if (isset($_GET['action']) && $_GET['action'] === 'mark_read' && isset($_GET['guid'])) {
         // Defensively reload user data to ensure settings are fresh
         $fresh_xml_data = simplexml_load_file($userFile);
@@ -1345,10 +1389,12 @@ if (isset($_SESSION['username'])) {
                 $article = $cache_xml->addChild('item');
                 $title = html_entity_decode($parsed_item['title'], ENT_QUOTES | ENT_XML1, 'UTF-8');
                 $content = html_entity_decode($parsed_item['content'], ENT_QUOTES | ENT_XML1, 'UTF-8');
+                $summary = html_entity_decode($parsed_item['summary'], ENT_QUOTES | ENT_XML1, 'UTF-8');
 
                 $article->addChild('feed_url', $parsed_item['feed_url']);
                 addChildWithCDATA($article, 'title_original', $title);
                 addChildWithCDATA($article, 'content_original', $content);
+                addChildWithCDATA($article, 'description_original', $summary);
                 $article->addChild('pubDate', $parsed_item['pubDate']);
                 $article->addChild('guid', $parsed_item['guid']);
                 $article->addChild('link', $parsed_item['link']);
@@ -2053,7 +2099,12 @@ if (isset($_SESSION['username'])) {
         .sidebar-total-link { font-weight: 600; color: var(--text-color); transition: color 0.2s ease; }
         .sidebar-count { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; padding: 0.2em 0.6em; font-size: 0.85em; font-weight: 600; border-radius: 999px; background-color: #ececec; color: #555; margin-right: 0.75em; }
         .sidebar-folder-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35em; }
+        .sidebar-folder-title { display: flex; align-items: center; gap: 0.45rem; min-width: 0; }
         .sidebar-folder-link { font-family: var(--font-headline); font-size: 1.1em; color: var(--text-color); transition: color 0.2s ease; }
+        .folder-move-controls { display: inline-flex; flex-direction: column; gap: 0.2rem; }
+        .folder-move-btn { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 18px; border: 1px solid var(--border-color); border-radius: 5px; background: #fff; color: #555; font-size: 0.7em; line-height: 1; transition: border-color 0.2s ease, color 0.2s ease; }
+        .folder-move-btn:hover { color: var(--accent-color); border-color: var(--accent-color); text-decoration: none; }
+        .folder-move-btn.disabled { opacity: 0.35; pointer-events: none; }
         .sidebar-feeds { list-style: none; padding-left: 0; margin: 0; }
         .sidebar-feeds.feed-list { padding-left: 0; }
         .sidebar-feeds li { margin-bottom: 0.35em; display: flex; align-items: center; gap: 0.75rem; }
@@ -2392,6 +2443,9 @@ if (isset($xml_feeds->folder)) {
                 'unread' => $feed_unread
             ];
         }
+        usort($folder_feeds, function($a, $b) {
+            return strcasecmp($a['name'], $b['name']);
+        });
         $total_unread_all += $folder_unread;
         $sidebar_folders[] = [
             'name' => $folder_name,
@@ -2413,10 +2467,32 @@ $current_feed = $_GET['feed'] ?? '';
 <?php if (empty($sidebar_folders)): ?>
                                 <p class="text-muted" style="margin-top: 1em;">Todavía no tienes fuentes suscritas.</p>
 <?php else: ?>
-<?php foreach ($sidebar_folders as $folder_entry): ?>
+<?php
+    $sidebar_folders_count = count($sidebar_folders);
+    $sidebar_return_url = $_SERVER['REQUEST_URI'] ?? 'nisaba.php?view=all_feeds';
+?>
+<?php foreach ($sidebar_folders as $folder_index => $folder_entry): ?>
+<?php
+    $is_first_folder = ($folder_index === 0);
+    $is_last_folder = ($folder_index === ($sidebar_folders_count - 1));
+?>
                                 <div class="sidebar-folder">
                                     <div class="sidebar-folder-header">
-                                        <a href="?view=folder&amp;name=<?php echo urlencode($folder_entry['name']); ?>" class="sidebar-folder-link<?php echo ($current_view === 'folder' && $current_folder === $folder_entry['name']) ? ' active' : ''; ?>"><?php echo htmlspecialchars($folder_entry['name']); ?></a>
+                                        <div class="sidebar-folder-title">
+                                            <a href="?view=folder&amp;name=<?php echo urlencode($folder_entry['name']); ?>" class="sidebar-folder-link<?php echo ($current_view === 'folder' && $current_folder === $folder_entry['name']) ? ' active' : ''; ?>"><?php echo htmlspecialchars($folder_entry['name']); ?></a>
+                                            <span class="folder-move-controls">
+<?php if ($is_first_folder): ?>
+                                                <span class="folder-move-btn disabled" aria-hidden="true">▲</span>
+<?php else: ?>
+                                                <a class="folder-move-btn" href="?action=move_folder&amp;name=<?php echo urlencode($folder_entry['name']); ?>&amp;dir=up&amp;return_url=<?php echo urlencode($sidebar_return_url); ?>" aria-label="Subir carpeta">▲</a>
+<?php endif; ?>
+<?php if ($is_last_folder): ?>
+                                                <span class="folder-move-btn disabled" aria-hidden="true">▼</span>
+<?php else: ?>
+                                                <a class="folder-move-btn" href="?action=move_folder&amp;name=<?php echo urlencode($folder_entry['name']); ?>&amp;dir=down&amp;return_url=<?php echo urlencode($sidebar_return_url); ?>" aria-label="Bajar carpeta">▼</a>
+<?php endif; ?>
+                                            </span>
+                                        </div>
                                         <span class="sidebar-count"><?php echo $folder_entry['unread']; ?></span>
                                     </div>
 <?php if (!empty($folder_entry['feeds'])): ?>
@@ -2823,7 +2899,7 @@ $current_feed = $_GET['feed'] ?? '';
                                         $favicon_url = $favicon_map[$feed_url] ?? 'nisaba.png';
 
                                         $raw_title = $item->title_original;
-                                        $raw_desc = $item->content_original;
+                                        $raw_desc = (isset($item->description_original) && trim((string)$item->description_original) !== '') ? $item->description_original : $item->content_original;
                                         $display_title = normalize_feed_text($raw_title);
                                         $display_desc = normalize_feed_text($raw_desc);
                                         echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
@@ -2902,7 +2978,7 @@ $current_feed = $_GET['feed'] ?? '';
                                     $favicon_url = $favicon_map[$feed_url] ?? 'nisaba.png';
 
                                     $raw_title = $item->title_original;
-                                    $raw_desc = $item->content_original;
+                                    $raw_desc = (isset($item->description_original) && trim((string)$item->description_original) !== '') ? $item->description_original : $item->content_original;
                                     $display_title = normalize_feed_text($raw_title);
                                     $display_desc = normalize_feed_text($raw_desc);
                                     echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
@@ -2962,7 +3038,7 @@ $current_feed = $_GET['feed'] ?? '';
                                         if ($is_read && !$show_read_for_this_request) continue;
 
                                         $raw_title = $item->title_original;
-                                        $raw_desc = $item->content_original;
+                                        $raw_desc = (isset($item->description_original) && trim((string)$item->description_original) !== '') ? $item->description_original : $item->content_original;
                                         $display_title = normalize_feed_text($raw_title);
                                         $display_desc = normalize_feed_text($raw_desc);
                                         echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';

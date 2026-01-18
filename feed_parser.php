@@ -100,6 +100,7 @@ function parse_feed_items(SimpleXMLElement $source_xml, string $feed_url, array 
 
         $pub_date = resolve_item_pub_date($item, $is_atom);
         $content = extract_item_content($item, $is_atom);
+        $summary = extract_item_summary($item, $is_atom, $content);
         $image = extract_item_image($item, $content);
 
         if ($image !== '') {
@@ -117,6 +118,7 @@ function parse_feed_items(SimpleXMLElement $source_xml, string $feed_url, array 
             'guid' => $guid,
             'title' => $title,
             'content' => $content,
+            'summary' => $summary,
             'pubDate' => $pub_date,
             'link' => $link,
             'image' => $image,
@@ -231,6 +233,22 @@ function extract_item_content(SimpleXMLElement $item, bool $is_atom): string
     }
 
     return (string)$item->description;
+}
+
+function extract_item_summary(SimpleXMLElement $item, bool $is_atom, string $content_html): string
+{
+    if ($is_atom) {
+        if (isset($item->summary) && trim((string)$item->summary) !== '') {
+            return (string)$item->summary;
+        }
+        return $content_html;
+    }
+
+    if (isset($item->description) && trim((string)$item->description) !== '') {
+        return (string)$item->description;
+    }
+
+    return $content_html;
 }
 
 function extract_item_image(SimpleXMLElement $item, string $content_html): string
