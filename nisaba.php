@@ -323,7 +323,12 @@ function generate_notes_rss($xml_data, $xml_notes, $username) {
             $item->addChild('link', htmlspecialchars($note->article_link));
             $item->addChild('guid', htmlspecialchars($note->article_guid));
             $item->addChild('pubDate', date(DATE_RSS, strtotime((string)$note->date)));
-            addChildWithCDATA($item, 'description', $note->content);
+            $note_text = normalize_note_text((string)$note->content);
+            addChildWithCDATA($item, 'description', $note_text);
+
+            $content_node = $item->addChild('content:encoded', null, 'http://purl.org/rss/1.0/modules/content/');
+            $content_node_dom = dom_import_simplexml($content_node);
+            $content_node_dom->appendChild($content_node_dom->ownerDocument->createCDATASection(note_text_to_html($note_text)));
         }
     }
 
@@ -1015,6 +1020,27 @@ function addChildWithCDATA(SimpleXMLElement $parent, $name, $value) {
     }
 }
 
+function normalize_note_text($text) {
+    return str_replace(["\r\n", "\r"], "\n", (string)$text);
+}
+
+function note_text_to_html($text) {
+    $normalized = normalize_note_text($text);
+    $escaped = htmlspecialchars($normalized, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $paragraphs = preg_split("/\n{2,}/", $escaped);
+    $html_parts = [];
+
+    foreach ($paragraphs as $paragraph) {
+        $paragraph = trim($paragraph, "\n");
+        if ($paragraph === '') {
+            continue;
+        }
+        $html_parts[] = '<p>' . nl2br($paragraph, false) . '</p>';
+    }
+
+    return implode("\n", $html_parts);
+}
+
 // --- 2. LÓGICA DE AUTENTICACIÓN ---
 
 if (isset($_GET['logout'])) { session_destroy(); header('Location: nisaba.php'); exit; }
@@ -1634,7 +1660,7 @@ if (isset($_SESSION['username'])) {
         }
         if (isset($_POST['save_note'])) {
             $guid = $_POST['article_guid'];
-            $note_content = $_POST['note_content'];
+            $note_content = normalize_note_text($_POST['note_content']);
             $existing_note = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
             if (!empty($existing_note)) {
                 $existing_note[0]->content = $note_content;
@@ -1656,7 +1682,7 @@ if (isset($_SESSION['username'])) {
         if (isset($_POST['edit_note'])) {
             $guid = $_POST['article_guid'];
             $new_title = $_POST['article_title'];
-            $new_content = $_POST['note_content'];
+            $new_content = normalize_note_text($_POST['note_content']);
             $note_to_edit = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
             if (!empty($note_to_edit)) {
                 $note_to_edit[0]->article_title = $new_title;
@@ -1689,12 +1715,12 @@ if (isset($_SESSION['username'])) {
                 $telegram_chat_id = isset($xml_data->settings->telegram_chat_id) ? (string)$xml_data->settings->telegram_chat_id : '';
 
                 $note_title = (string)$note_to_send[0]->article_title;
-                $note_content = (string)$note_to_send[0]->content;
+                $note_content = normalize_note_text((string)$note_to_send[0]->content);
                 $note_link = (string)$note_to_send[0]->article_link;
 
-                $text = "<b>" . htmlspecialchars($note_title) . "</b>\n\n";
-                $text .= htmlspecialchars($note_content) . "\n\n";
-                $text .= "<a href=\"" . htmlspecialchars($note_link) . "\">Ver artículo original</a>";
+                $text = "<b>" . htmlspecialchars($note_title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "</b>\n\n";
+                $text .= htmlspecialchars($note_content, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "\n\n";
+                $text .= "<a href=\"" . htmlspecialchars($note_link, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "\">Ver artículo original</a>";
 
                 $result = send_telegram_message($telegram_bot_token, $telegram_chat_id, $text);
 
