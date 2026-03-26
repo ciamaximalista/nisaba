@@ -1183,10 +1183,49 @@ if (isset($_SESSION['username'])) {
         $fresh_xml_data = simplexml_load_file($userFile);
         $fresh_cache_duration = sanitize_cache_duration(isset($fresh_xml_data->settings->cache_duration) ? (string)$fresh_xml_data->settings->cache_duration : (string)DEFAULT_CACHE_DURATION_HOURS);
 
-        if (isset($_POST['guids']) && is_array($_POST['guids'])) {
-            $guids_to_mark = array_flip($_POST['guids']);
-            if (file_exists($cacheFile) && !empty($guids_to_mark)) {
-                $cache_xml = simplexml_load_file($cacheFile);
+        if (file_exists($cacheFile)) {
+            $cache_xml = simplexml_load_file($cacheFile);
+            $guids_to_mark = [];
+
+            if (isset($_POST['guids']) && is_array($_POST['guids'])) {
+                $guids_to_mark = array_flip($_POST['guids']);
+            } else {
+                $scope_view = $_POST['scope_view'] ?? 'all_feeds';
+                $scope_folder = $_POST['scope_folder'] ?? '';
+                $scope_feed = $_POST['scope_feed'] ?? '';
+                $folder_feed_urls = [];
+
+                if ($scope_view === 'folder' && $scope_folder !== '') {
+                    $feeds_in_folder = $xml_feeds->xpath('//folder[@name="' . htmlspecialchars($scope_folder) . '"]/feed');
+                    foreach ($feeds_in_folder as $feed_node) {
+                        $folder_feed_urls[(string)$feed_node['url']] = true;
+                    }
+                }
+
+                foreach ($cache_xml->item as $item) {
+                    if ((string)$item->read === '1') {
+                        continue;
+                    }
+
+                    $item_guid = (string)$item->guid;
+                    $item_feed_url = (string)$item->feed_url;
+                    $matches_scope = false;
+
+                    if ($scope_view === 'feed_articles' && $scope_feed !== '') {
+                        $matches_scope = ($item_feed_url === $scope_feed);
+                    } elseif ($scope_view === 'folder' && !empty($folder_feed_urls)) {
+                        $matches_scope = isset($folder_feed_urls[$item_feed_url]);
+                    } else {
+                        $matches_scope = true;
+                    }
+
+                    if ($matches_scope) {
+                        $guids_to_mark[$item_guid] = true;
+                    }
+                }
+            }
+
+            if (!empty($guids_to_mark)) {
                 $guids_to_persist = [];
 
                 for ($i = count($cache_xml->item) - 1; $i >= 0; $i--) {
@@ -3575,15 +3614,19 @@ $current_feed = $_GET['feed'] ?? '';
             const unreadItems = document.querySelectorAll('.article-item:not(.read)');
             if (unreadItems.length === 0) return;
 
-            const guids = [];
-            unreadItems.forEach(item => {
-                guids.push(item.dataset.guid);
-            });
-
             const formData = new FormData();
-            guids.forEach(guid => {
-                formData.append('guids[]', guid);
-            });
+            const urlParams = new URLSearchParams(window.location.search);
+            let scopeView = 'all_feeds';
+
+            if (urlParams.get('feed')) {
+                scopeView = 'feed_articles';
+            } else if (urlParams.get('view')) {
+                scopeView = urlParams.get('view');
+            }
+
+            formData.append('scope_view', scopeView);
+            formData.append('scope_folder', urlParams.get('name') || urlParams.get('folder') || '');
+            formData.append('scope_feed', urlParams.get('feed') || '');
 
             fetch('?action=mark_all_read', {
                 method: 'POST',
