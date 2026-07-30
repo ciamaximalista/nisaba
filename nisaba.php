@@ -839,6 +839,49 @@ function normalize_feed_text($text) {
     return trim($text);
 }
 
+function cached_article_guid($item): string {
+    if (!$item instanceof SimpleXMLElement || !isset($item->guid)) {
+        return '';
+    }
+    $guid = trim((string)$item->guid);
+    if ($guid !== '') {
+        return $guid;
+    }
+
+    $title = (string)($item->title_original ?? $item->title ?? '');
+    $date = (string)($item->pubDate ?? '');
+    if (trim($title . $date) === '') {
+        return '';
+    }
+
+    return 'hash-' . md5($title . $date);
+}
+
+function find_cached_articles_by_guid(SimpleXMLElement $cache_xml, string $article_guid): array {
+    $articles = $cache_xml->xpath('//item[guid="' . htmlspecialchars($article_guid) . '"]');
+    if (!empty($articles)) {
+        return $articles;
+    }
+
+    $matches = [];
+    foreach ($cache_xml->item as $item) {
+        if (cached_article_guid($item) === $article_guid) {
+            $matches[] = $item;
+        }
+    }
+    return $matches;
+}
+
+function first_href_from_html(string $html): string {
+    if ($html === '') {
+        return '';
+    }
+    if (preg_match('/<a[^>]+href=["\']([^"\']+)["\']/i', $html, $matches)) {
+        return html_entity_decode($matches[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    }
+    return '';
+}
+
 function sanitize_cache_duration($value) {
     $allowed = ['2880', '4320', '5760'];
     $value = trim((string)$value);
@@ -1315,12 +1358,13 @@ if (isset($_SESSION['username'])) {
         if (file_exists($cacheFile)) {
             $cache_xml = simplexml_load_file($cacheFile);
             $article_guid = $_GET['guid'];
-            $articles = $cache_xml->xpath('//item[guid="' . htmlspecialchars($article_guid) . '"]');
+            $articles = find_cached_articles_by_guid($cache_xml, $article_guid);
             if (!empty($articles)) {
                 if ($fresh_cache_duration === '0') {
                     if (!isset($fresh_xml_data->read_guids)) $fresh_xml_data->addChild('read_guids');
-                    if (count($fresh_xml_data->xpath('//read_guids/guid[.="' . htmlspecialchars((string)$articles[0]->guid) . '"]')) == 0) {
-                        $fresh_xml_data->read_guids->addChild('guid', (string)$articles[0]->guid);
+                    $read_guid = cached_article_guid($articles[0]);
+                    if ($read_guid !== '' && count($fresh_xml_data->xpath('//read_guids/guid[.="' . htmlspecialchars($read_guid) . '"]')) == 0) {
+                        $fresh_xml_data->read_guids->addChild('guid', $read_guid);
                         $fresh_xml_data->asXML($userFile);
                     }
                     unset($articles[0][0]);
@@ -1347,7 +1391,7 @@ if (isset($_SESSION['username'])) {
         if (file_exists($cacheFile)) {
             $cache_xml = simplexml_load_file($cacheFile);
             $article_guid = $_GET['guid'];
-            $articles = $cache_xml->xpath('//item[guid="' . htmlspecialchars($article_guid) . '"]');
+            $articles = find_cached_articles_by_guid($cache_xml, $article_guid);
             if (!empty($articles)) {
                 $articles[0]->read = 0;
                 if (isset($articles[0]->read_at)) {
@@ -1419,15 +1463,29 @@ if (isset($_SESSION['username'])) {
             }
         }
 
+        // Remove malformed cache entries so they can be fetched again with a usable article GUID.
+        for ($i = count($cache_xml->item) - 1; $i >= 0; $i--) {
+            $item = $cache_xml->item[$i];
+            if (trim((string)$item->guid) === '') {
+                unset($cache_xml->item[$i]);
+            }
+        }
+
         // 2. Get all GUIDs that should be skipped (permanently read OR already in cache)
         $skip_guids = [];
         if (isset($xml_data->read_guids)) {
             foreach ($xml_data->read_guids->guid as $guid) {
-                $skip_guids[(string)$guid] = true;
+                $guid_key = trim((string)$guid);
+                if ($guid_key !== '') {
+                    $skip_guids[$guid_key] = true;
+                }
             }
         }
         foreach ($cache_xml->item as $item) {
-            $skip_guids[(string)$item->guid] = true;
+            $guid_key = trim((string)$item->guid);
+            if ($guid_key !== '') {
+                $skip_guids[$guid_key] = true;
+            }
         }
         
         // 3. Fetch new articles
@@ -1611,6 +1669,14 @@ if (isset($_SESSION['username'])) {
         // --- Restore Error Handler ---
         restore_error_handler();
         // -----------------------------
+        if (!empty($nisaba_errors)) {
+            $visible_errors = array_slice($nisaba_errors, 0, 5);
+            $hidden_count = count($nisaba_errors) - count($visible_errors);
+            $_SESSION['feed_error'] = 'Algunas fuentes no se pudieron actualizar: ' . htmlspecialchars(implode(' | ', $visible_errors));
+            if ($hidden_count > 0) {
+                $_SESSION['feed_error'] .= ' | y ' . $hidden_count . ' avisos más.';
+            }
+        }
         if (isset($_GET['ajax'])) {
             header('Content-Type: application/json');
             echo json_encode(['status' => 'success']);
@@ -2156,6 +2222,9 @@ if (isset($_SESSION['username'])) {
         .form-group label { display: block; margin-bottom: 0.5em; }
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.8em; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: var(--font-body); }
         .error { color: var(--danger-color); margin-bottom: 1em; }
+        .sidebar-mobile-toggle { display: none; width: 100%; align-items: center; justify-content: space-between; margin: -0.25rem 0 1rem; padding: 0.7rem 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; background: #fff; color: var(--text-color); font-weight: 700; }
+        .sidebar-mobile-toggle::after { content: '+'; font-size: 1.2em; line-height: 1; }
+        .sidebar-mobile-toggle.is-open::after { content: '-'; }
         .sidebar-list { list-style: none; padding: 0; margin: 0; }
         .sidebar-folder { margin-bottom: 1.5em; }
         .sidebar-folder-content { display: flex; gap: 2.5rem; align-items: stretch; }
@@ -2199,13 +2268,26 @@ if (isset($_SESSION['username'])) {
         .notes-mini:hover { text-decoration: none; transform: scale(1.03); box-shadow: 0 10px 18px rgba(0,0,0,0.24); }
         .notes-stack.no-mini { min-height: 160px; }
         @media (max-width: 991.98px) {
+            .sidebar-mobile-toggle { display: flex; }
+            .sidebar-mobile-panel { display: none; }
+            .sidebar-mobile-panel.is-open { display: block; }
             .sidebar-folder-content { gap: 1rem; flex-direction: column; }
             .sidebar-folder-list { padding-right: 0; }
-            .notes-stack-wrapper { width: 100%; }
-            .notes-stack { width: 100%; min-height: 260px; }
-            .notes-stack-received { margin-top: 1.8rem; }
-            .notes-stack .notes-mini { position: relative; width: 100%; left: 0; top: 0; transform: rotate(0deg); margin-bottom: 0.75rem; box-shadow: 0 4px 10px rgba(0,0,0,0.18); }
-            .notes-stack .notes-postit-main { transform: rotate(0deg); }
+            .notes-stack-wrapper { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.85rem; align-items: start; margin-top: 1rem; }
+            .notes-stack { width: 100%; height: auto !important; min-height: 0 !important; display: flex; gap: 0.65rem; overflow-x: auto; overflow-y: hidden; padding: 0.4rem 0.15rem 0.85rem; scroll-snap-type: x proximity; }
+            .notes-stack-own, .notes-stack-received, .notes-stack.no-mini { min-height: 0 !important; }
+            .notes-stack-received { margin-top: 0; }
+            .notes-stack .notes-mini { position: relative !important; top: auto !important; left: auto !important; z-index: 1 !important; flex: 0 0 min(220px, 70vw); width: auto; max-width: 220px; min-height: 104px; transform: none !important; margin-bottom: 0; padding: 0.75rem 0.9rem; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.18); scroll-snap-align: start; }
+            .notes-stack .notes-postit-main { flex: 0 0 112px; min-height: 104px; display: flex; align-items: center; justify-content: center; transform: none !important; font-size: 1.05em; padding: 0.75rem 0.9rem; scroll-snap-align: start; }
+            .notes-mini strong { font-size: 1em; margin-bottom: 0.25rem; }
+            .notes-mini span { font-size: 0.92em; line-height: 1.25; }
+            .notes-mini-favicon { width: 22px; height: 22px; }
+        }
+        @media (max-width: 575.98px) {
+            .notes-stack-wrapper { grid-template-columns: 1fr; gap: 0.35rem; }
+            .notes-stack { padding-bottom: 0.7rem; }
+            .notes-stack .notes-postit-main { flex-basis: 98px; min-height: 92px; }
+            .notes-stack .notes-mini { flex-basis: min(210px, 76vw); min-height: 92px; }
         }
         .feed-manage-list { list-style: none; padding: 0; }
         .feed-manage-list li { display: flex; justify-content: space-between; align-items: center; padding: 0.5em; border-bottom: 1px solid var(--border-color); }
@@ -2380,6 +2462,8 @@ if (isset($_SESSION['username'])) {
                                 <a href="?view=search" class="btn" style="background-color: #00FFFF; border-color: #00FFFF;">Buscar</a>
                             </div>
                         </div>
+                        <button type="button" class="sidebar-mobile-toggle" id="sidebar-mobile-toggle" aria-expanded="false" aria-controls="sidebar-mobile-panel">Fuentes y gestión</button>
+                        <div class="sidebar-mobile-panel" id="sidebar-mobile-panel">
 <?php
 $own_notes_sidebar = [];
 if (isset($xml_notes->note)) {
@@ -2478,7 +2562,7 @@ if (file_exists($cacheFile)) {
     $sidebar_cache_snapshot = @simplexml_load_file($cacheFile);
     if ($sidebar_cache_snapshot) {
         foreach ($sidebar_cache_snapshot->item as $cached_item) {
-            if ((string)$cached_item->read === '0') {
+            if ((string)$cached_item->read === '0' && cached_article_guid($cached_item) !== '') {
                 $feed_key = (string)$cached_item->feed_url;
                 if (!isset($sidebar_unread_by_feed[$feed_key])) {
                     $sidebar_unread_by_feed[$feed_key] = 0;
@@ -2633,6 +2717,7 @@ $current_feed = $_GET['feed'] ?? '';
 
 
                             </div>
+                        </div>
                         </div>
                     </aside>
                 </div>
@@ -2815,15 +2900,16 @@ $current_feed = $_GET['feed'] ?? '';
                         if (file_exists($cacheFile)) {
                             $cache_xml = simplexml_load_file($cacheFile);
                             if($cache_xml) {
-                                $articles = $cache_xml->xpath('//item[guid="' . htmlspecialchars($article_guid) . '"]');
+                                $articles = find_cached_articles_by_guid($cache_xml, $article_guid);
                                 if(!empty($articles)) {
                                     $article = clone $articles[0]; // Clone for rendering before modification
 
                                     // Perform update/delete logic on the original object
                                     if ($fresh_cache_duration === '0') {
                                         if (!isset($fresh_xml_data->read_guids)) $fresh_xml_data->addChild('read_guids');
-                                        if (count($fresh_xml_data->xpath('//read_guids/guid[.="' . htmlspecialchars((string)$articles[0]->guid) . '"]')) == 0) {
-                                            $fresh_xml_data->read_guids->addChild('guid', (string)$articles[0]->guid);
+                                        $read_guid = cached_article_guid($articles[0]);
+                                        if ($read_guid !== '' && count($fresh_xml_data->xpath('//read_guids/guid[.="' . htmlspecialchars($read_guid) . '"]')) == 0) {
+                                            $fresh_xml_data->read_guids->addChild('guid', $read_guid);
                                             $fresh_xml_data->asXML($userFile);
                                         }
                                         unset($articles[0][0]);
@@ -2860,6 +2946,10 @@ $current_feed = $_GET['feed'] ?? '';
                             $article_content = (string)$article->content_original;
                             $article_image = (string)$article->image;
                             $article_link = (string)$article->link;
+                            $article_cache_guid = cached_article_guid($article);
+                            if (empty($article_link)) {
+                                $article_link = first_href_from_html($article_content);
+                            }
                             if (empty($article_link) && filter_var($article_guid, FILTER_VALIDATE_URL)) {
                                 $article_link = $article_guid;
                             }
@@ -2891,7 +2981,7 @@ $current_feed = $_GET['feed'] ?? '';
 <?php if ($archive_today_url !== ''): ?>
                             <a href="<?php echo htmlspecialchars($archive_today_url); ?>" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary">Versión en Archive.today</a>
 <?php endif; ?>
-                            <a href="?action=mark_unread&guid=<?php echo urlencode($article->guid); ?>&return_url=<?php echo urlencode('?feed=' . urlencode((string)$article->feed_url) . '&folder=' . urlencode($_GET['folder'] ?? '')); ?>" class="btn btn-outline-primary">Marcar como no leído</a>
+                            <a href="?action=mark_unread&guid=<?php echo urlencode($article_cache_guid); ?>&return_url=<?php echo urlencode('?feed=' . urlencode((string)$article->feed_url) . '&folder=' . urlencode($_GET['folder'] ?? '')); ?>" class="btn btn-outline-primary">Marcar como no leído</a>
                         </div>
                         <hr>
                         <div class="article-nav">
@@ -2904,14 +2994,14 @@ $current_feed = $_GET['feed'] ?? '';
                         </div>
                         <h3>Notas</h3>
                         <form method="POST" action="nisaba.php" class="note-form">
-                            <input type="hidden" name="article_guid" value="<?php echo htmlspecialchars($article->guid); ?>">
+                            <input type="hidden" name="article_guid" value="<?php echo htmlspecialchars($article_cache_guid); ?>">
                             <input type="hidden" name="article_title" value="<?php echo htmlspecialchars($article_title); ?>">
                             <input type="hidden" name="article_link" value="<?php echo htmlspecialchars($article_link); ?>">
-                            <input type="hidden" name="return_url" value="<?php echo htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'nisaba.php?article_guid=' . urlencode($article->guid)); ?>">
+                            <input type="hidden" name="return_url" value="<?php echo htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'nisaba.php?article_guid=' . urlencode($article_cache_guid)); ?>">
                             <div class="form-group">
                                 <?php
                                     $note_text = '';
-                                    $notes = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($article->guid) . '"]');
+                                    $notes = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($article_cache_guid) . '"]');
                                     if (!empty($notes)) $note_text = (string)$notes[0]->content;
                                 ?>
                                 <textarea name="note_content" class="postit-textarea"><?php echo htmlspecialchars($note_text); ?></textarea>
@@ -2928,7 +3018,11 @@ $current_feed = $_GET['feed'] ?? '';
                         if (file_exists($cacheFile)) {
                             $count_cache_xml = simplexml_load_file($cacheFile);
                             if ($count_cache_xml) {
-                                $unread_count = count($count_cache_xml->xpath('//item[read="0"]'));
+                                foreach ($count_cache_xml->item as $count_item) {
+                                    if ((string)$count_item->read === '0' && cached_article_guid($count_item) !== '') {
+                                        $unread_count++;
+                                    }
+                                }
                             }
                         }
                     ?>
@@ -2956,7 +3050,11 @@ $current_feed = $_GET['feed'] ?? '';
                                         }
                                     }
 
+                                    $rendered_articles = 0;
                                     foreach ($sorted_articles as $item) {
+                                        $article_guid = cached_article_guid($item);
+                                        if ($article_guid === '') continue;
+
                                         $is_read = (string)$item->read === '1';
                                         if ($is_read && !$show_read_for_this_request) continue;
 
@@ -2967,14 +3065,18 @@ $current_feed = $_GET['feed'] ?? '';
                                         $raw_desc = (isset($item->description_original) && trim((string)$item->description_original) !== '') ? $item->description_original : $item->content_original;
                                         $display_title = normalize_feed_text($raw_title);
                                         $display_desc = normalize_feed_text($raw_desc);
-                                        echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
+                                        echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($article_guid) . '">';
                                         if (!empty($item->image)) echo '<img src="' . htmlspecialchars($item->image) . '" alt="" class="article-image">';
-                                        echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '">' . htmlspecialchars($display_title) . '</a></h3>';
+                                        echo '<h3><a href="?article_guid=' . urlencode($article_guid) . '">' . htmlspecialchars($display_title) . '</a></h3>';
                                         echo '<p>' . htmlspecialchars(truncate_by_words($display_desc ?? '', 80)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
                                         if (!$is_read) {
-                                            echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
+                                            echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($article_guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($article_guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
                                         }
                                         echo '</li>';
+                                        $rendered_articles++;
+                                    }
+                                    if ($rendered_articles === 0) {
+                                        echo "<li>No hay artículos para mostrar. Prueba a actualizar las feeds.</li>";
                                     }
                                 }
                             } else { echo "<li>No hay artículos por leer. Prueba a actualizar las feeds.</li>"; }
@@ -2994,10 +3096,16 @@ $current_feed = $_GET['feed'] ?? '';
                             }
                             $count_cache_xml = simplexml_load_file($cacheFile);
                             if (!empty($feed_urls) && $count_cache_xml) {
-                                $unread_xpath_query = '//item[read="0" and (' . implode(' or ', array_map(function($url) {
-                                    return 'feed_url="' . $url . '"';
-                                }, $feed_urls)) . ')]';
-                                $unread_count = count($count_cache_xml->xpath($unread_xpath_query));
+                                $folder_feed_url_map = array_flip($feed_urls);
+                                foreach ($count_cache_xml->item as $count_item) {
+                                    if (
+                                        (string)$count_item->read === '0'
+                                        && cached_article_guid($count_item) !== ''
+                                        && isset($folder_feed_url_map[(string)$count_item->feed_url])
+                                    ) {
+                                        $unread_count++;
+                                    }
+                                }
                             }
                         }
                     ?>
@@ -3035,7 +3143,11 @@ $current_feed = $_GET['feed'] ?? '';
                                     }
                                 }
 
+                                $rendered_articles = 0;
                                 foreach ($sorted_articles as $item) {
+                                    $article_guid = cached_article_guid($item);
+                                    if ($article_guid === '') continue;
+
                                     $is_read = (string)$item->read === '1';
                                     if ($is_read && !$show_read_for_this_request) continue;
 
@@ -3046,14 +3158,18 @@ $current_feed = $_GET['feed'] ?? '';
                                     $raw_desc = (isset($item->description_original) && trim((string)$item->description_original) !== '') ? $item->description_original : $item->content_original;
                                     $display_title = normalize_feed_text($raw_title);
                                     $display_desc = normalize_feed_text($raw_desc);
-                                    echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
+                                    echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($article_guid) . '">';
                                     if (!empty($item->image)) echo '<img src="' . htmlspecialchars($item->image) . '" alt="" class="article-image">';
-                                    echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '&folder=' . urlencode($folder_name) . '">' . htmlspecialchars($display_title) . '</a></h3>';
+                                    echo '<h3><a href="?article_guid=' . urlencode($article_guid) . '&folder=' . urlencode($folder_name) . '">' . htmlspecialchars($display_title) . '</a></h3>';
                                     echo '<p>' . htmlspecialchars(truncate_by_words($display_desc ?? '', 80)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
                                     if (!$is_read) {
-                                        echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
+                                        echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($article_guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($article_guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
                                     }
                                     echo '</li>';
+                                    $rendered_articles++;
+                                }
+                                if ($rendered_articles === 0) {
+                                    echo "<li>No hay artículos para mostrar. Prueba a actualizar las feeds.</li>";
                                 }
                             }
                         } else { echo "<li>Carpeta no encontrada o cache no generada.</li>"; }
@@ -3076,7 +3192,15 @@ $current_feed = $_GET['feed'] ?? '';
                         if (file_exists($cacheFile)) {
                             $count_cache_xml = simplexml_load_file($cacheFile);
                             if ($count_cache_xml) {
-                                $unread_count = count($count_cache_xml->xpath('//item[read="0" and feed_url="' . $selected_feed_url . '"]'));
+                                foreach ($count_cache_xml->item as $count_item) {
+                                    if (
+                                        (string)$count_item->read === '0'
+                                        && (string)$count_item->feed_url === $selected_feed_url
+                                        && cached_article_guid($count_item) !== ''
+                                    ) {
+                                        $unread_count++;
+                                    }
+                                }
                             }
                         }
                     ?>
@@ -3098,7 +3222,11 @@ $current_feed = $_GET['feed'] ?? '';
                                         return strtotime((string)$b->pubDate) - strtotime((string)$a->pubDate);
                                     });
 
+                                    $rendered_articles = 0;
                                     foreach ($sorted_articles as $item) {
+                                        $article_guid = cached_article_guid($item);
+                                        if ($article_guid === '') continue;
+
                                         $is_read = (string)$item->read === '1';
                                         if ($is_read && !$show_read_for_this_request) continue;
 
@@ -3106,14 +3234,18 @@ $current_feed = $_GET['feed'] ?? '';
                                         $raw_desc = (isset($item->description_original) && trim((string)$item->description_original) !== '') ? $item->description_original : $item->content_original;
                                         $display_title = normalize_feed_text($raw_title);
                                         $display_desc = normalize_feed_text($raw_desc);
-                                        echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($item->guid) . '">';
+                                        echo '<li class="article-item' . ($is_read ? ' read' : '') . '" data-guid="' . htmlspecialchars($article_guid) . '">';
                                         if (!empty($item->image)) echo '<img src="' . htmlspecialchars($item->image) . '" alt="" class="article-image">';
-                                        echo '<h3><a href="?article_guid=' . urlencode($item->guid) . '&folder=' . urlencode($_GET['folder'] ?? '') . '">'. htmlspecialchars($display_title) . '</a></h3>';
+                                        echo '<h3><a href="?article_guid=' . urlencode($article_guid) . '&folder=' . urlencode($_GET['folder'] ?? '') . '">'. htmlspecialchars($display_title) . '</a></h3>';
                                         echo '<p>' . htmlspecialchars(truncate_by_words($display_desc ?? '', 80)) . ' <img src="' . htmlspecialchars($favicon_url) . '" style="width: 16px; height: 16px; vertical-align: middle;"></p>';
                                         if (!$is_read) {
-                                            echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($item->guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($item->guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
+                                            echo '<div style="clear: both; padding-top: 10px;"><a href="?action=mark_read&guid=' . urlencode($article_guid) . '&return_url=' . urlencode($_SERVER['REQUEST_URI']) . '" onclick="markAsRead(this, \'' . urlencode($article_guid) . '\'); return false;" class="btn btn-outline-secondary btn-sm mark-as-read-btn">Marcar leído</a></div>';
                                         }
                                         echo '</li>';
+                                        $rendered_articles++;
+                                    }
+                                    if ($rendered_articles === 0) {
+                                        echo "<li>No hay artículos para mostrar. Prueba a actualizar las feeds.</li>";
                                     }
                                 }
                             } else { echo "<li>No hay artículos por leer. Actualiza las feeds.</li>"; }
@@ -3567,6 +3699,28 @@ $current_feed = $_GET['feed'] ?? '';
         </div>
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
         <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const sidebarToggle = document.getElementById('sidebar-mobile-toggle');
+            const sidebarPanel = document.getElementById('sidebar-mobile-panel');
+            if (!sidebarToggle || !sidebarPanel) return;
+
+            const setPanelState = (isOpen) => {
+                sidebarPanel.classList.toggle('is-open', isOpen);
+                sidebarToggle.classList.toggle('is-open', isOpen);
+                sidebarToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            };
+
+            sidebarToggle.addEventListener('click', () => {
+                setPanelState(!sidebarPanel.classList.contains('is-open'));
+            });
+
+            window.addEventListener('resize', () => {
+                if (window.innerWidth >= 992) {
+                    setPanelState(false);
+                }
+            });
+        });
+
         function markAsRead(button, guid) {
             fetch('?action=mark_read&guid=' + guid + '&ajax=1')
                 .then(response => response.json())
