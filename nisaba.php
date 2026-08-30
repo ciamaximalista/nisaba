@@ -272,7 +272,7 @@ function nisaba_resolve_url(string $base_url, string $relative_path): string {
 }
 
 function generate_notes_rss($xml_data, $xml_notes, $username) {
-    $rss = new SimpleXMLElement('<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"></rss>');
+    $rss = new SimpleXMLElement('<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/"></rss>');
     $channel = $rss->addChild('channel');
 
     $display_name = '';
@@ -324,6 +324,17 @@ function generate_notes_rss($xml_data, $xml_notes, $username) {
             $item->addChild('guid', htmlspecialchars($note->article_guid));
             $item->addChild('pubDate', date(DATE_RSS, strtotime((string)$note->date)));
             $note_text = normalize_note_text((string)$note->content);
+            $note_image_url = isset($note->image_url) ? trim((string)$note->image_url) : '';
+            if ($note_image_url !== '' && filter_var($note_image_url, FILTER_VALIDATE_URL)) {
+                $note_image_mime = note_image_mime_type($note_image_url);
+                $enclosure = $item->addChild('enclosure');
+                $enclosure->addAttribute('url', $note_image_url);
+                $enclosure->addAttribute('type', $note_image_mime);
+                $media_node = $item->addChild('media:content', null, 'http://search.yahoo.com/mrss/');
+                $media_node->addAttribute('url', $note_image_url);
+                $media_node->addAttribute('type', $note_image_mime);
+                $media_node->addAttribute('medium', 'image');
+            }
             addChildWithCDATA($item, 'description', $note_text);
 
             $content_node = $item->addChild('content:encoded', null, 'http://purl.org/rss/1.0/modules/content/');
@@ -1067,6 +1078,29 @@ function normalize_note_text($text) {
     return str_replace(["\r\n", "\r"], "\n", (string)$text);
 }
 
+function sanitize_note_image_url($url) {
+    $url = trim((string)$url);
+    if ($url === '' || !filter_var($url, FILTER_VALIDATE_URL)) {
+        return '';
+    }
+    $scheme = strtolower((string)(parse_url($url, PHP_URL_SCHEME) ?? ''));
+    return in_array($scheme, ['http', 'https'], true) ? $url : '';
+}
+
+function note_image_mime_type($url) {
+    $path = strtolower((string)(parse_url($url, PHP_URL_PATH) ?? ''));
+    $extension = pathinfo($path, PATHINFO_EXTENSION);
+    $types = [
+        'png' => 'image/png',
+        'gif' => 'image/gif',
+        'webp' => 'image/webp',
+        'svg' => 'image/svg+xml',
+        'jpeg' => 'image/jpeg',
+        'jpg' => 'image/jpeg',
+    ];
+    return $types[$extension] ?? 'image/jpeg';
+}
+
 function note_text_to_html($text) {
     $normalized = normalize_note_text($text);
     $escaped = htmlspecialchars($normalized, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -1765,16 +1799,33 @@ if (isset($_SESSION['username'])) {
         }
         if (isset($_POST['save_note'])) {
             $guid = $_POST['article_guid'];
+            $note_title = trim($_POST['article_title'] ?? '');
             $note_content = normalize_note_text($_POST['note_content']);
+            $note_image_url = sanitize_note_image_url($_POST['note_image_url'] ?? '');
+            if ($note_image_url === '') {
+                $note_image_url = sanitize_note_image_url($_POST['article_image'] ?? '');
+            }
+            if ($note_title === '') {
+                $_SESSION['notes_feedback'] = ['type' => 'error', 'message' => 'La nota necesita un título.'];
+                header('Location: ' . ($_POST['return_url'] ?? 'nisaba.php?article_guid=' . urlencode($guid)));
+                exit;
+            }
             $existing_note = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
             if (!empty($existing_note)) {
+                $existing_note[0]->article_title = $note_title;
                 $existing_note[0]->content = $note_content;
+                if (isset($existing_note[0]->image_url)) {
+                    $existing_note[0]->image_url = $note_image_url;
+                } else {
+                    $existing_note[0]->addChild('image_url', htmlspecialchars($note_image_url));
+                }
             } else {
                 $note = $xml_notes->addChild('note');
                 $note->addChild('article_guid', $guid);
-                $note->addChild('article_title', $_POST['article_title']);
+                $note->addChild('article_title', $note_title);
                 $note->addChild('article_link', $_POST['article_link']);
                 $note->addChild('content', $note_content);
+                $note->addChild('image_url', htmlspecialchars($note_image_url));
                 $note->addChild('date', date('c'));
             }
             $xml_notes->asXML($notesFile);
@@ -1786,12 +1837,23 @@ if (isset($_SESSION['username'])) {
 
         if (isset($_POST['edit_note'])) {
             $guid = $_POST['article_guid'];
-            $new_title = $_POST['article_title'];
+            $new_title = trim($_POST['article_title'] ?? '');
             $new_content = normalize_note_text($_POST['note_content']);
+            $new_image_url = sanitize_note_image_url($_POST['note_image_url'] ?? '');
+            if ($new_title === '') {
+                $_SESSION['notes_feedback'] = ['type' => 'error', 'message' => 'La nota necesita un título.'];
+                header('Location: nisaba.php?view=notes');
+                exit;
+            }
             $note_to_edit = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
             if (!empty($note_to_edit)) {
                 $note_to_edit[0]->article_title = $new_title;
                 $note_to_edit[0]->content = $new_content;
+                if (isset($note_to_edit[0]->image_url)) {
+                    $note_to_edit[0]->image_url = $new_image_url;
+                } else {
+                    $note_to_edit[0]->addChild('image_url', htmlspecialchars($new_image_url));
+                }
             }
             $xml_notes->asXML($notesFile);
             generate_notes_rss($xml_data, $xml_notes, $username);
@@ -2267,6 +2329,7 @@ if (isset($_SESSION['username'])) {
         .notes-mini strong { display: block; font-size: 1.12em; margin-bottom: 0.4em; font-family: 'Covered By Your Grace', cursive; }
         .notes-mini span { display: block; font-size: 1em; line-height: 1.35; font-family: 'Patrick Hand', cursive; }
         .notes-mini:hover { text-decoration: none; transform: scale(1.03); box-shadow: 0 10px 18px rgba(0,0,0,0.24); }
+        .notes-postit-main, .notes-postit-main:hover, .notes-mini, .notes-mini:hover, .notes-mini strong, .notes-mini span { color: #111 !important; }
         .notes-stack.no-mini { min-height: 160px; }
         @media (max-width: 991.98px) {
             .sidebar-mobile-toggle { display: flex; }
@@ -2316,6 +2379,7 @@ if (isset($_SESSION['username'])) {
         .notes-container { column-count: 2; column-gap: 1em; }
         .note { position: relative; display: inline-block; width: 100%; padding: 1em; margin-bottom: 1em; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); transition: transform 0.2s; }
         .note:hover { transform: scale(1.05); }
+        .note, .note h4, .note p, .note small, .note a, .note a:hover, .note-display, .note-display h4, .note-display p { color: #111 !important; }
         .note .note-source-favicon { position: absolute; top: 0.6em; right: 0.6em; width: 28px; height: 28px; border-radius: 50%; object-fit: cover; box-shadow: 0 3px 6px rgba(0,0,0,0.25); }
 
         .summary-container {
@@ -3002,16 +3066,31 @@ $current_feed = $_GET['feed'] ?? '';
                         <h3>Notas</h3>
                         <form method="POST" action="nisaba.php" class="note-form">
                             <input type="hidden" name="article_guid" value="<?php echo htmlspecialchars($article_cache_guid); ?>">
-                            <input type="hidden" name="article_title" value="<?php echo htmlspecialchars($article_title); ?>">
                             <input type="hidden" name="article_link" value="<?php echo htmlspecialchars($article_link); ?>">
+                            <input type="hidden" name="article_image" value="<?php echo htmlspecialchars($article_image); ?>">
                             <input type="hidden" name="return_url" value="<?php echo htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'nisaba.php?article_guid=' . urlencode($article_cache_guid)); ?>">
+                            <?php
+                                $note_title = '';
+                                $note_text = '';
+                                $note_image_url = '';
+                                $notes = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($article_cache_guid) . '"]');
+                                if (!empty($notes)) {
+                                    $note_title = (string)$notes[0]->article_title;
+                                    $note_text = (string)$notes[0]->content;
+                                    $note_image_url = isset($notes[0]->image_url) ? (string)$notes[0]->image_url : '';
+                                }
+                            ?>
                             <div class="form-group">
-                                <?php
-                                    $note_text = '';
-                                    $notes = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($article_cache_guid) . '"]');
-                                    if (!empty($notes)) $note_text = (string)$notes[0]->content;
-                                ?>
-                                <textarea name="note_content" class="postit-textarea"><?php echo htmlspecialchars($note_text); ?></textarea>
+                                <label for="note-title">Título</label>
+                                <input type="text" id="note-title" name="article_title" value="<?php echo htmlspecialchars($note_title); ?>" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="note-image-url">Imagen asociada opcional</label>
+                                <input type="url" id="note-image-url" name="note_image_url" value="<?php echo htmlspecialchars($note_image_url); ?>" placeholder="<?php echo htmlspecialchars($article_image); ?>">
+                            </div>
+                            <div class="form-group">
+                                <label for="note-content">Contenido</label>
+                                <textarea id="note-content" name="note_content" class="postit-textarea"><?php echo htmlspecialchars($note_text); ?></textarea>
                             </div>
                             <button type="submit" name="save_note" class="btn btn-primary btn-sm">Guardar Nota</button>
                         </form>
@@ -3365,7 +3444,8 @@ $current_feed = $_GET['feed'] ?? '';
                                                                 echo '<button type="submit" class="btn btn-primary">Enviar a Telegram</button>';
                                                                 echo '</form></div></div>';                                echo '<form method="POST" action="nisaba.php?view=notes" class="note-edit-form" style="display:none;">';
                                 echo '<input type="hidden" name="article_guid" value="' . htmlspecialchars($note->article_guid) . '">';
-                                echo '<div class="form-group"><label>Título</label><input type="text" name="article_title" value="' . htmlspecialchars($note->article_title) . '" class="form-group input"></div>';
+                                echo '<input type="hidden" name="note_image_url" value="' . htmlspecialchars(isset($note->image_url) ? (string)$note->image_url : '') . '">';
+                                echo '<div class="form-group"><label>Título</label><input type="text" name="article_title" value="' . htmlspecialchars($note->article_title) . '" class="form-group input" required></div>';
                                 echo '<div class="form-group"><label>Contenido</label><textarea name="note_content" class="postit-textarea">' . htmlspecialchars($note->content) . '</textarea></div>';
                                 echo '<div style="display: flex; gap: 10px;"><button type="submit" name="edit_note" class="btn btn-primary">Guardar</button>';
                                 echo '<button type="button" onclick="toggleNoteEdit(this)" class="btn btn-danger">Cancelar</button></div>';
