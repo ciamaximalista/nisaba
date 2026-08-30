@@ -100,6 +100,10 @@ function parse_feed_items(SimpleXMLElement $source_xml, string $feed_url, array 
 
         $pub_date = resolve_item_pub_date($item, $is_atom);
         $content = extract_item_content($item, $is_atom);
+        $content_first_link = first_item_href_from_html($content);
+        if ($content_first_link !== '' && normalize_item_url_for_compare($link) === normalize_item_url_for_compare($guid)) {
+            $link = $content_first_link;
+        }
         $summary = extract_item_summary($item, $is_atom, $content);
         $image = extract_item_image($item, $content);
 
@@ -171,6 +175,25 @@ function resolve_item_link(SimpleXMLElement $item, bool $is_atom): string
     }
 
     return '';
+}
+
+function first_item_href_from_html(string $html): string
+{
+    if ($html === '') {
+        return '';
+    }
+    if (preg_match('/<a[^>]+href=["\']([^"\']+)["\']/i', $html, $matches)) {
+        $href = html_entity_decode($matches[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        return filter_var($href, FILTER_VALIDATE_URL) ? $href : '';
+    }
+    return '';
+}
+
+function normalize_item_url_for_compare(string $url): string
+{
+    $url = trim(html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    $url = strtok($url, '#');
+    return rtrim($url, '/');
 }
 
 function build_item_guid(SimpleXMLElement $item, bool $is_atom, string $link): string

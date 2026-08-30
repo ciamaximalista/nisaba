@@ -893,6 +893,12 @@ function first_href_from_html(string $html): string {
     return '';
 }
 
+function normalize_url_for_compare(string $url): string {
+    $url = trim(html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    $url = strtok($url, '#');
+    return rtrim($url, '/');
+}
+
 function sanitize_cache_duration($value) {
     $allowed = ['2880', '4320', '5760'];
     $value = trim((string)$value);
@@ -3018,8 +3024,12 @@ $current_feed = $_GET['feed'] ?? '';
                             $article_image = (string)$article->image;
                             $article_link = (string)$article->link;
                             $article_cache_guid = cached_article_guid($article);
+                            $content_first_link = first_href_from_html($article_content);
+                            if ($content_first_link !== '' && normalize_url_for_compare($article_link) === normalize_url_for_compare($article_cache_guid)) {
+                                $article_link = $content_first_link;
+                            }
                             if (empty($article_link)) {
-                                $article_link = first_href_from_html($article_content);
+                                $article_link = $content_first_link;
                             }
                             if (empty($article_link) && filter_var($article_guid, FILTER_VALIDATE_URL)) {
                                 $article_link = $article_guid;
