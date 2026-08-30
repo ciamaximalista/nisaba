@@ -2192,11 +2192,12 @@ if (isset($_SESSION['username'])) {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Covered+By+Your+Grace&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Patrick+Hand&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=VT323&display=swap" rel="stylesheet">
     <style>
-        :root { --font-headline: 'Poppins', sans-serif; --font-body: 'Inter', sans-serif; --text-color: #333; --bg-color: #fff; --border-color: #e0e0e0; --accent-color: #007bff; --danger-color: #d9534f; }
+        :root { --font-headline: 'Poppins', sans-serif; --font-body: 'Inter', sans-serif; --text-color: #333; --bg-color: #fff; --surface-color: #fff; --sidebar-bg: #f9f9f9; --border-color: #e0e0e0; --accent-color: #007bff; --danger-color: #d9534f; --muted-text: #777; --control-bg: #fff; --control-text: #333; }
+        body.theme-dark { --text-color: #f2f2f2; --bg-color: #050505; --surface-color: #151515; --sidebar-bg: #101010; --border-color: #333; --accent-color: #66b7ff; --muted-text: #bbb; --control-bg: #1f1f1f; --control-text: #f2f2f2; }
         body { font-family: var(--font-body); color: var(--text-color); background-color: var(--bg-color); margin: 0; display: flex; flex-direction: column; min-height: 100vh; }
         .main-wrapper { min-height: 100vh; display: flex; flex-direction: column; }
         .main-container { flex-grow: 1; }
-        .sidebar { font-size: 1rem; border-right: 1px solid var(--border-color); background: #f9f9f9; padding: 1.5em; }
+        .sidebar { font-size: 1rem; border-right: 1px solid var(--border-color); background: var(--sidebar-bg); padding: 1.5em; }
         @media (min-width: 992px) {
             .sidebar { width: 720px; min-width: 720px; }
         }
@@ -2213,16 +2214,16 @@ if (isset($_SESSION['username'])) {
         .content h4 { font-size: 1.2em; }
         a { color: var(--accent-color); text-decoration: none; }
         a:hover { text-decoration: underline; }
-        footer { text-align: center; padding: 1em; border-top: 1px solid var(--border-color); font-size: 0.8em; color: #777; }
+        footer { text-align: center; padding: 1em; border-top: 1px solid var(--border-color); font-size: 0.8em; color: var(--muted-text); background: var(--bg-color); }
         footer img { vertical-align: middle; height: 1.2em; margin-left: 0.5em; }
         .logo { display: flex; justify-content: center; margin-bottom: 1em; }
         .logo img { height: 160px; }
-        .auth-container { max-width: 400px; margin: 5em auto; padding: 2em; border: 1px solid var(--border-color); border-radius: 8px; }
+        .auth-container { max-width: 400px; margin: 5em auto; padding: 2em; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-color); }
         .form-group { margin-bottom: 1em; }
         .form-group label { display: block; margin-bottom: 0.5em; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.8em; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: var(--font-body); }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 0.8em; border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box; font-family: var(--font-body); background: var(--control-bg); color: var(--control-text); }
         .error { color: var(--danger-color); margin-bottom: 1em; }
-        .sidebar-mobile-toggle { display: none; width: 100%; align-items: center; justify-content: space-between; margin: -0.25rem 0 1rem; padding: 0.7rem 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; background: #fff; color: var(--text-color); font-weight: 700; }
+        .sidebar-mobile-toggle { display: none; width: 100%; align-items: center; justify-content: space-between; margin: -0.25rem 0 1rem; padding: 0.7rem 0.9rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-color); color: var(--text-color); font-weight: 700; }
         .sidebar-mobile-toggle::after { content: '+'; font-size: 1.2em; line-height: 1; }
         .sidebar-mobile-toggle.is-open::after { content: '-'; }
         .sidebar-list { list-style: none; padding: 0; margin: 0; }
@@ -2231,12 +2232,12 @@ if (isset($_SESSION['username'])) {
         .sidebar-folder-list { flex: 1 1 auto; min-width: 0; padding-right: 2.5rem; }
         .sidebar-total-row { display: flex; align-items: center; justify-content: space-between; padding: 0.25em 0 0.75em 0; border-bottom: 1px solid var(--border-color); margin-bottom: 0.75em; }
         .sidebar-total-link { font-weight: 600; color: var(--text-color); transition: color 0.2s ease; }
-        .sidebar-count { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; padding: 0.2em 0.6em; font-size: 0.85em; font-weight: 600; border-radius: 999px; background-color: #ececec; color: #555; margin-right: 0.75em; }
+        .sidebar-count { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; padding: 0.2em 0.6em; font-size: 0.85em; font-weight: 600; border-radius: 999px; background-color: var(--surface-color); color: var(--muted-text); margin-right: 0.75em; }
         .sidebar-folder-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35em; }
         .sidebar-folder-title { display: flex; align-items: center; gap: 0.45rem; min-width: 0; }
         .sidebar-folder-link { font-family: var(--font-headline); font-size: 1.1em; color: var(--text-color); transition: color 0.2s ease; }
         .folder-move-controls { display: inline-flex; flex-direction: column; gap: 0.2rem; }
-        .folder-move-btn { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 18px; border: 1px solid var(--border-color); border-radius: 5px; background: #fff; color: #555; font-size: 0.7em; line-height: 1; transition: border-color 0.2s ease, color 0.2s ease; }
+        .folder-move-btn { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 18px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--surface-color); color: var(--muted-text); font-size: 0.7em; line-height: 1; transition: border-color 0.2s ease, color 0.2s ease; }
         .folder-move-btn:hover { color: var(--accent-color); border-color: var(--accent-color); text-decoration: none; }
         .folder-move-btn.disabled { opacity: 0.35; pointer-events: none; }
         .sidebar-feeds { list-style: none; padding-left: 0; margin: 0; }
@@ -2246,7 +2247,7 @@ if (isset($_SESSION['username'])) {
         .sidebar-feed-link img { width: 18px; height: 18px; border-radius: 50%; }
         .sidebar-total-link:hover, .sidebar-folder-link:hover, .sidebar-feed-link:hover { color: var(--accent-color); text-decoration: none; }
         .sidebar-total-link.active, .sidebar-folder-link.active, .sidebar-feed-link.active { color: var(--accent-color); font-weight: 600; }
-        .sidebar-utilities { margin-top: 2em; padding: 1em 1.2em; border: 1px solid var(--border-color); border-radius: 10px; background: #fff; display: flex; flex-direction: column; gap: 0.6em; }
+        .sidebar-utilities { margin-top: 2em; padding: 1em 1.2em; border: 1px solid var(--border-color); border-radius: 10px; background: var(--surface-color); display: flex; flex-direction: column; gap: 0.6em; }
         .sidebar-utilities h5 { margin: 0 0 0.4em; font-size: 0.9em; text-transform: uppercase; letter-spacing: 0.08em; color: #666; }
         .sidebar-utility-link { font-weight: 600; color: var(--accent-color); }
         .sidebar-utility-link::before { content: '\203A\00A0'; }
@@ -2307,11 +2308,11 @@ if (isset($_SESSION['username'])) {
         .article-item p { margin: 0; }
         .article-full-content img { max-width: 100%; height: auto; border-radius: 8px; }
         .note-form textarea { width: 100%; min-height: 150px; }
-        .summary-box { border: 1px solid #eee; padding: 1em; margin-bottom: 1em; border-radius: 4px; }
+        .summary-box { border: 1px solid var(--border-color); padding: 1em; margin-bottom: 1em; border-radius: 4px; background: var(--surface-color); }
         .sidebar-feeds .folder-container { display: block; }
         .article-full-content { font-size: 1.1em; line-height: 1.6; }
-        .font-size-controls { position: fixed; top: 10px; right: 10px; z-index: 1000; background: rgba(255,255,255,0.8); padding: 5px; border-radius: 5px; border: 1px solid #ccc; }
-        .font-size-controls button { background: #fff; border: 1px solid #ccc; padding: 5px 10px; cursor: pointer; }
+        .font-size-controls { position: fixed; top: 10px; right: 10px; z-index: 1000; background: color-mix(in srgb, var(--surface-color) 86%, transparent); padding: 5px; border-radius: 5px; border: 1px solid var(--border-color); display: flex; gap: 0.25rem; }
+        .font-size-controls button { background: var(--control-bg); color: var(--control-text); border: 1px solid var(--border-color); padding: 5px 10px; cursor: pointer; min-width: 34px; border-radius: 4px; }
         .notes-container { column-count: 2; column-gap: 1em; }
         .note { position: relative; display: inline-block; width: 100%; padding: 1em; margin-bottom: 1em; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); transition: transform 0.2s; }
         .note:hover { transform: scale(1.05); }
@@ -2364,8 +2365,8 @@ if (isset($_SESSION['username'])) {
             position: absolute;
             top: 10px;
             right: 10px;
-            background-color: #e0e0e0;
-            color: #333;
+            background-color: var(--control-bg);
+            color: var(--control-text);
             border: none;
             padding: 5px 10px;
             border-radius: 5px;
@@ -2374,7 +2375,7 @@ if (isset($_SESSION['username'])) {
             z-index: 10;
         }
         .copy-btn:hover {
-            background-color: #ccc;
+            background-color: var(--surface-color);
         }
 
         .modal {
@@ -2389,7 +2390,8 @@ if (isset($_SESSION['username'])) {
             background-color: rgba(0,0,0,0.4);
         }
         .modal-content {
-            background-color: #fefefe;
+            background-color: var(--surface-color);
+            color: var(--text-color);
             margin: 10% auto;
             padding: 20px;
             border: 1px solid #888;
@@ -2425,6 +2427,10 @@ if (isset($_SESSION['username'])) {
             color: var(--accent-color);
             text-decoration: none;
         }
+        .card, .list-group-item, .form-control, .form-select { background-color: var(--surface-color); color: var(--text-color); border-color: var(--border-color); }
+        .text-muted, small { color: var(--muted-text) !important; }
+        body.theme-dark .btn-outline-secondary, body.theme-dark .btn-outline-primary, body.theme-dark .btn-outline-success { color: var(--text-color); border-color: var(--border-color); }
+        body.theme-dark .article-item.read h3 a, body.theme-dark .article-item.read p { color: #888; }
     </style>
 </head>
 <body>
@@ -2433,6 +2439,7 @@ if (isset($_SESSION['username'])) {
         <div class="font-size-controls">
             <button id="decrease-font">-</button>
             <button id="increase-font">+</button>
+            <button id="toggle-theme" title="Cambiar fondo" aria-label="Cambiar fondo">☀</button>
         </div>
     <?php
         // --- 4.1. LÓGICA DE VISTA ---
@@ -3847,6 +3854,26 @@ $current_feed = $_GET['feed'] ?? '';
             }
         }
         document.addEventListener('DOMContentLoaded', function() {
+            const savedTheme = localStorage.getItem('nisabaTheme') || 'light';
+            const themeButton = document.getElementById('toggle-theme');
+            const applyTheme = (theme) => {
+                const isDark = theme === 'dark';
+                document.body.classList.toggle('theme-dark', isDark);
+                if (themeButton) {
+                    themeButton.textContent = isDark ? '☾' : '☀';
+                    themeButton.setAttribute('aria-label', isDark ? 'Cambiar a fondo blanco' : 'Cambiar a fondo negro');
+                    themeButton.setAttribute('title', isDark ? 'Cambiar a fondo blanco' : 'Cambiar a fondo negro');
+                }
+            };
+            applyTheme(savedTheme);
+            if (themeButton) {
+                themeButton.addEventListener('click', function() {
+                    const nextTheme = document.body.classList.contains('theme-dark') ? 'light' : 'dark';
+                    localStorage.setItem('nisabaTheme', nextTheme);
+                    applyTheme(nextTheme);
+                });
+            }
+
             // Font size controls
             if (document.getElementById('increase-font')) {
                 const body = document.querySelector('.content');
