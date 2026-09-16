@@ -177,16 +177,50 @@ function get_favicon($feed_url) {
     return $default_favicon;
 }
 
+function nisaba_ai_providers(): array {
+    return [
+        'gemini' => 'Google Gemini',
+        'deepseek' => 'DeepSeek',
+    ];
+}
+
+function sanitize_ai_provider($value): string {
+    $value = strtolower(trim((string)$value));
+    return array_key_exists($value, nisaba_ai_providers()) ? $value : 'gemini';
+}
+
+function nisaba_http_request(string $url, string $method = 'GET', array $headers = [], ?string $body = null, int $timeout = 30): array {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
+    curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'Nisaba/1.0');
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    if ($method === 'POST') {
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body ?? '');
+    }
+    $result = curl_exec($ch);
+    $http_code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curl_error = curl_error($ch);
+    curl_close($ch);
+
+    return ['body' => $result === false ? '' : $result, 'code' => $http_code, 'error' => $curl_error];
+}
+
 function get_gemini_models($api_key) {
     if (empty($api_key)) return [];
-    
-    $url = 'https://generativelanguage.googleapis.com/v1beta/models?key=' . $api_key;
-    $context = stream_context_create(['http' => ['timeout' => 5, 'ignore_errors' => true]]);
-    $result = @file_get_contents($url, false, $context);
 
-    if ($result === FALSE) return [];
+    $url = 'https://generativelanguage.googleapis.com/v1beta/models?key=' . urlencode($api_key);
+    $http = nisaba_http_request($url, 'GET', [], null, 10);
+    if ($http['body'] === '') return [];
 
-    $response = json_decode($result, true);
+    $response = json_decode($http['body'], true);
     if (!isset($response['models'])) return [];
 
     $generative_models = [];
@@ -201,6 +235,53 @@ function get_gemini_models($api_key) {
     }
     return $generative_models;
 }
+
+function get_deepseek_models($api_key) {
+    if (empty($api_key)) return [];
+
+    $http = nisaba_http_request('https://api.deepseek.com/models', 'GET', ['Authorization: Bearer ' . $api_key], null, 10);
+    if ($http['body'] === '') return [];
+
+    $response = json_decode($http['body'], true);
+    if (!isset($response['data']) || !is_array($response['data'])) return [];
+
+    $models = [];
+    foreach ($response['data'] as $model) {
+        if (!isset($model['id'])) continue;
+        $models[] = ['id' => (string)$model['id'], 'name' => (string)$model['id']];
+    }
+    return $models;
+}
+
+function render_model_options(array $available_models, array $default_models, string $selected_model, string $api_key): string {
+    $html = '';
+    if (!empty($available_models)) {
+        $ids = array_column($available_models, 'id');
+        if ($selected_model === '' || !in_array($selected_model, $ids, true)) $selected_model = $ids[0];
+        foreach ($available_models as $model) {
+            $html .= '<option value="' . htmlspecialchars($model['id']) . '"' . ($selected_model === $model['id'] ? ' selected' : '') . '>' . htmlspecialchars($model['name']) . '</option>';
+        }
+        return $html;
+    }
+    // Fallback if API key is not set or the API call fails: offer the defaults and keep the saved value.
+    if ($selected_model !== '' && !in_array($selected_model, $default_models, true)) {
+        array_unshift($default_models, $selected_model);
+    }
+    if ($selected_model === '') $selected_model = $default_models[0];
+    foreach ($default_models as $model_id) {
+        $html .= '<option value="' . htmlspecialchars($model_id) . '"' . ($selected_model === $model_id ? ' selected' : '') . '>' . htmlspecialchars($model_id) . '</option>';
+    }
+    $html .= '<option value="" disabled>' . ($api_key === '' ? 'Introduce una API key para ver los modelos' : 'No se pudieron cargar los modelos desde la API') . '</option>';
+    return $html;
+}
+
+function nisaba_default_models(string $provider): array {
+    if ($provider === 'deepseek') {
+        return ['deepseek-chat', 'deepseek-reasoner'];
+    }
+    return ['gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-pro'];
+}
+
 
 function nisaba_get_base_url() {
     if (!isset($_SERVER['HTTP_HOST'])) {
@@ -281,7 +362,7 @@ function generate_notes_rss($xml_data, $xml_notes, $username) {
     }
 
     $channel_title = $display_name !== '' ? 'Notas de ' . $display_name : 'Notas de Nisaba para ' . $username;
-    $channel->addChild('title', $channel_title);
+    xml_add_text_child($channel, 'title', $channel_title);
 
     $feed_link = nisaba_public_url('notas.xml');
     if ($feed_link === '') {
@@ -293,8 +374,8 @@ function generate_notes_rss($xml_data, $xml_notes, $username) {
     $channel->addChild('generator', 'Nisaba');
     $channel->addChild('owner_username', $username);
     if ($display_name !== '') {
-        $channel->addChild('owner_name', $display_name);
-        $channel->addChild('managingEditor', $display_name);
+        xml_add_text_child($channel, 'owner_name', $display_name);
+        xml_add_text_child($channel, 'managingEditor', $display_name);
     }
 
     $user_favicon_path = isset($xml_data->settings->user_favicon) ? trim((string)$xml_data->settings->user_favicon) : '';
@@ -302,7 +383,7 @@ function generate_notes_rss($xml_data, $xml_notes, $username) {
     if ($user_favicon_url !== '') {
         $image = $channel->addChild('image');
         $image->addChild('url', $user_favicon_url);
-        $image->addChild('title', $channel_title);
+        xml_add_text_child($image, 'title', $channel_title);
         $image->addChild('link', $feed_link);
         $channel->addChild('owner_favicon', $user_favicon_url);
     }
@@ -319,9 +400,9 @@ function generate_notes_rss($xml_data, $xml_notes, $username) {
 
         foreach ($notes_array as $note) {
             $item = $channel->addChild('item');
-            $item->addChild('title', htmlspecialchars($note->article_title));
-            $item->addChild('link', htmlspecialchars($note->article_link));
-            $item->addChild('guid', htmlspecialchars($note->article_guid));
+            xml_add_text_child($item, 'title', (string)$note->article_title);
+            xml_add_text_child($item, 'link', (string)$note->article_link);
+            xml_add_text_child($item, 'guid', (string)$note->article_guid);
             $item->addChild('pubDate', date(DATE_RSS, strtotime((string)$note->date)));
             $note_text = normalize_note_text((string)$note->content);
             $note_image_url = isset($note->image_url) ? trim((string)$note->image_url) : '';
@@ -472,9 +553,9 @@ function generate_analysis_rss($xml_data, $xml_summaries, $username) {
     }
     $owner_name = $display_name !== '' ? $display_name : $username;
 
-    $channel->addChild('title', 'Análisis de Nisaba para ' . $owner_name);
+    xml_add_text_child($channel, 'title', 'Análisis de Nisaba para ' . $owner_name);
     $channel->addChild('link', nisaba_public_url('analisis.xml'));
-    $channel->addChild('description', 'Feed con los an\xE1lisis de prospectiva generados por Nisaba para ' . $owner_name);
+    xml_add_text_child($channel, 'description', 'Feed con los análisis de prospectiva generados por Nisaba para ' . $owner_name);
     $channel->addChild('language', 'es-es');
     $channel->addChild('generator', 'Nisaba');
 
@@ -483,8 +564,8 @@ function generate_analysis_rss($xml_data, $xml_summaries, $username) {
     if ($user_favicon_url !== '') {
         $image = $channel->addChild('image');
         $image->addChild('url', $user_favicon_url);
-        $image->addChild('title', $channel->title);
-        $image->addChild('link', $channel->link);
+        xml_add_text_child($image, 'title', (string)$channel->title);
+        $image->addChild('link', (string)$channel->link);
         $channel->addChild('owner_favicon', $user_favicon_url);
     }
 
@@ -510,11 +591,11 @@ function generate_analysis_rss($xml_data, $xml_summaries, $username) {
 
             $item = $channel->addChild('item');
 
-            $title = 'Análisis de ' . htmlspecialchars($folder_name) . ' el ' . date('d/m/Y', $timestamp);
-            $item->addChild('title', $title);
+            $title = 'Análisis de ' . $folder_name . ' el ' . date('d/m/Y', $timestamp);
+            xml_add_text_child($item, 'title', $title);
 
-            $description = 'Análisis de ' . htmlspecialchars($folder_name) . ' el ' . date('d/m/Y', $timestamp) . ' a las ' . date('H:i', $timestamp) . ' desde el Nisaba de ' . htmlspecialchars($owner_name);
-            $item->addChild('description', $description);
+            $description = 'Análisis de ' . $folder_name . ' el ' . date('d/m/Y', $timestamp) . ' a las ' . date('H:i', $timestamp) . ' desde el Nisaba de ' . $owner_name;
+            xml_add_text_child($item, 'description', $description);
 
             $summary_text = isset($summary->text) ? (string)$summary->text : (string)$summary;
             $title_to_guid_map = [];
@@ -597,6 +678,34 @@ function update_and_get_analysis($source_url) {
     return null;
 }
 
+// Only allow redirects back into this Nisaba (relative URLs), never to an external host.
+// Validates an uploaded image by its real content (not the client-declared MIME type) and returns a safe extension, or '' if rejected.
+function uploaded_image_extension(array $file, int $max_bytes = 1048576): string {
+    if (!isset($file['tmp_name'], $file['size']) || $file['size'] <= 0 || $file['size'] >= $max_bytes || !is_uploaded_file($file['tmp_name'])) {
+        return '';
+    }
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = (string)$finfo->file($file['tmp_name']);
+    $extensions = [
+        'image/png' => 'png',
+        'image/jpeg' => 'jpg',
+        'image/gif' => 'gif',
+        'image/webp' => 'webp',
+        'image/svg+xml' => 'svg',
+        'image/x-icon' => 'ico',
+        'image/vnd.microsoft.icon' => 'ico',
+    ];
+    return $extensions[$mime] ?? '';
+}
+
+function safe_return_url($url, string $default = 'nisaba.php?view=all_feeds'): string {
+    $url = trim((string)$url);
+    if ($url === '' || preg_match('#^[a-z][a-z0-9+.-]*:#i', $url) || str_starts_with($url, '//') || str_starts_with($url, '\\')) {
+        return $default;
+    }
+    return $url;
+}
+
 function mask_api_key($key) {
     if (strlen($key) < 8) {
         return 'No guardada o demasiado corta.';
@@ -638,172 +747,73 @@ function send_telegram_message($bot_token, $chat_id, $text) {
 
 
 
+// Every provider returns ['ok' => bool, 'text' => string]. When ok is false, text holds the error message.
 function get_gemini_summary($content, $api_key, $model, $prompt_template) {
-    if (empty($api_key) || empty($content)) return "No hay nada que analizar o la API key de Gemini no está configurada.";
-    if (empty($prompt_template)) $prompt_template = "ROL Y OBJETIVO
-Actúa como un analista de prospectiva estratégica y horizon scanning. Tu misión es analizar bloques de noticias y artículos de opinión provenientes de una misma región o ámbito para identificar «señales débiles» (weak signals). Estas señales son eventos, ideas o tendencias sutiles, emergentes o inesperadas que podrían anticipar o catalizar disrupciones significativas a nivel político, económico, tecnológico, social, cultural o medioambiental.
-
-Tu objetivo principal es sintetizar y destacar únicamente las piezas que apunten a una potencial ruptura de tendencia, un cambio de paradigma naciente o una tensión estratégica emergente, ignorando por completo la información rutinaria, predecible o de seguimiento.
-
-CONTEXTO Y VECTORES DE DISRUPCIÓN
-Evaluarás cada noticia dentro del bloque en función de su potencial para señalar un cambio en los siguientes vectores de disrupción:
-
-1. Geopolítica y Política:
-
-Reconfiguración de Alianzas: Acuerdos o tensiones inesperadas entre países, cambios en bloques de poder.
-
-Nuevas Regulaciones Estratégicas: Leyes que alteran radicalmente un sector clave (energía, tecnología, finanzas).
-
-Inestabilidad o Movimientos Sociales: Protestas con nuevas formas de organización, surgimiento de movimientos políticos disruptivos, crisis institucionales.
-
-Cambios en Doctrina Militar o de Seguridad: Nuevas estrategias de defensa, ciberseguridad o control de fronteras con implicaciones amplias.
-
-Vuelcos electorales o incrementos significativos en los parlamentos de fuerzas políticas minoritarias o emergentes.
-
-Líderes o altos funcionarios internacionales interpretando cambios de gobierno, elecciones o resultados electorales en clave geopolítica.
-
-Cambios radicales en políticas públicas de mucho peso económico o simbólico que afecten a más de un país (ej: paso de política comercial de globalización a proteccionismo, reducciones drásticas de la Política Agraria Común europea, reducciones o incrementos bruscos de ayuda a otros países, etc.).
-
-Revitalización de aspiraciones territoriales de unos estados sobre el territorio de otros y nuevas pugnas por el control de recursos básicos transfronterizos (ej. agua, minerales, petróleo, etc.).
-
-Maniobras militares conjuntas entre estados que no suelen hacerlas o que incrementan muy significativamente el número de tropas y recursos involucrados.
-
-Referencias inesperadas a recursos en países no asociados generalmente con ellos (ej: actividad petrolera en un país que no se considera productor de petróleo).
-
-2. Economía y Mercado:
-
-Nuevos Modelos de Negocio: Empresas que ganan tracción con una lógica de mercado radicalmente diferente.
-
-Fragilidades en Cadenas de Suministro: Crisis en nodos logísticos, escasez de materiales críticos que fuerzan una reorganización industrial.
-
-Anomalías Financieras: Inversiones de capital riesgo en sectores o geografías «olvidadas», comportamientos extraños en los mercados, surgimiento de activos no tradicionales.
-
-Conflictos Laborales Paradigmáticos: Huelgas, negociaciones o movimientos sindicales que apuntan a un cambio en la relación capital-trabajo.
-
-3. Tecnología y Ciencia:
-
-Avances Fundamentales: Descubrimientos científicos o tecnológicos (no incrementales) que abren campos completamente nuevos (ej. computación cuántica, biotecnología, nuevos materiales).
-
-Adopción Inesperada de Tecnología: Una tecnología nicho que empieza a ser adoptada masivamente en un sector imprevisto.
-
-Vulnerabilidades Sistémicas: Descubrimiento de fallos de seguridad o éticos en tecnologías de uso generalizado.
-
-Democratización del Acceso: Tecnologías avanzadas (IA, biohacking, etc.) que se vuelven accesibles y de código abierto, permitiendo usos no controlados.
-
-4. Sociedad y Cultura:
-
-Cambios en Valores o Comportamientos: Datos que indican un cambio rápido en la opinión pública sobre temas fundamentales (familia, trabajo, privacidad), nuevos patrones de consumo.
-
-Surgimiento de Subculturas Influyentes: Movimientos contraculturales o nichos que empiezan a permear en la cultura mayoritaria.
-
-Tensiones Demográficas o Migratorias: Cambios en flujos migratorios, envejecimiento poblacional o tasas de natalidad que generan nuevas presiones sociales.
-
-Narrativas y Debates Emergentes: Ideas o debates marginales que ganan repentinamente, aunque sea de forma puntual, visibilidad mediática o académica.
-
-Cambios en la propiedad de grandes medios y plataformas de contenidos de impacto global.
-
-Éxito global de series de TV, películas o libros que no se orientan a defender los valores y causas de la mayoría de medios y plataformas.
-
-5. Medio Ambiente y Energía:
-
-Eventos Climáticos Extremos con Impacto Sistémico: Desastres naturales que revelan fragilidades críticas en la infraestructura o la economía.
-
-Innovación en Energía o Recursos: Avances en fuentes de energía, almacenamiento o reciclaje que podrían alterar el paradigma energético.
-
-Escasez Crítica de Recursos: Agotamiento o conflicto por recursos básicos (agua, minerales raros) que escala a nivel político o económico.
-
-Activismo y Litigios Climáticos: Acciones legales o movimientos de activismo que logran un impacto significativo en la política corporativa o gubernamental.
-
-PROCESO DE RAZONAMIENTO (Paso a Paso)
-Al recibir un bloque de noticias, sigue internamente este proceso:
-
-Visión de Conjunto: Lee rápidamente los titulares del bloque para entender el contexto general ({{contexto_del_bloque}}).
-
-Análisis Individual: Para cada noticia del bloque, evalúa:
-
-Clasificación: ¿Se alinea con alguno de los vectores de disrupción listados?
-
-Evaluación de Señal: ¿Es un evento predecible y esperado (ruido) o es una señal genuina de cambio? Mide su nivel de «sorpresa», «anomalía» o «potencial de segundo orden».
-
-Filtrado: Descarta mentalmente todas las noticias que sean ruido o información incremental.
-
-Síntesis y Agrupación: De las noticias filtradas, agrúpalas si apuntan a una misma macrotendencia. Formula una síntesis global que conecte los puntos.
-
-Generación de la Salida: Construye el informe final siguiendo el formato estricto.
-
-DATOS DE ENTRADA
-Contexto del Bloque: {{contexto_del_bloque}} (Ej: Noticias de España, Artículos de opinión de medios europeos, Actualidad tecnológica de China)
-
-Bloque de Noticias: {{bloque_de_noticias}} (Una lista o conjunto de artículos, cada uno con título {{título}}, descripción {{descripción}} y enlace {{enlace}})
-
-FORMATO DE SALIDA Y REGLAS
-Existen dos posibles salidas: un informe de disrupción o una notificación de ausencia de señales.
-
-1. Si identificas al menos una señal relevante, genera un informe con ESTE formato EXACTO:
-
-# Análisis
-
-Síntesis ejecutiva (máximo 4 frases) que resume las principales corrientes de cambio o tensiones detectadas en el bloque de noticias. Conecta las señales si es posible.
-
-## Señales Débiles y Disrupciones Identificadas
-
-### Título conciso del primer hallazgo en español
-{{título}}
-
-Síntesis de Impacto: Una o dos frases que capturan por qué esta noticia es estratégicamente relevante, no un simple resumen.
-
-Explicación de la Señal: Explicación concisa (máximo 5 frases) que justifica la elección, conectando la noticia con uno o más vectores de disrupción y explorando sus posibles implicaciones de segundo o tercer orden.
-
----
-
-### Título conciso del segundo hallazgo en español
-{{título}}
-
-Síntesis de Impacto: ...
-
-Explicación de la Señal: ...
-
----
-
-(Repetir para cada señal identificada)
-
-Reglas estrictas para el informe:
-
-Jerarquía: El análisis general siempre va primero y debe ofrecer una visión conectada.
-
-Enfoque en la Implicación: Tanto la síntesis como la explicación deben centrarse en el «y qué» (so what?), no en el «qué» (what).
-
-Sin Adornos: No añadas emojis, comillas innecesarias, etiquetas extra, ni texto introductorio o de cierre.
-
-2. Si el bloque de noticias NO contiene ninguna señal de disrupción genuina, responde únicamente con:
-
-No se han detectado señales de disrupción significativas en este bloque de fuentes.";
-    $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model . ":generateContent?key=" . $api_key;
-    $prompt = $prompt_template . "
-
-" . $content;
-    $data = ['contents' => [['parts' => [['text' => $prompt]]]]];
-    $options = ['http' => ['header'  => "Content-Type: application/json
-", 'method'  => 'POST', 'content' => json_encode($data), 'ignore_errors' => true]];
-    $context = stream_context_create($options);
-    $result = @file_get_contents($url, false, $context);
-
-    if ($result === FALSE) {
-        return "Error al contactar la API de Gemini.";
+    if (empty($api_key)) return ['ok' => false, 'text' => 'La API key de Gemini no está configurada.'];
+    if (empty($content)) return ['ok' => false, 'text' => 'No hay nada que analizar.'];
+    if (empty($prompt_template)) $prompt_template = load_prompt_template();
+
+    $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . urlencode($api_key);
+    $data = ['contents' => [['parts' => [['text' => $prompt_template . "\n\n" . $content]]]]];
+    $http = nisaba_http_request($url, 'POST', ['Content-Type: application/json'], json_encode($data), 300);
+
+    if ($http['body'] === '') {
+        return ['ok' => false, 'text' => 'Error al contactar la API de Gemini' . ($http['error'] !== '' ? ': ' . $http['error'] : '.')];
     }
 
-    $response = json_decode($result, true);
-
+    $response = json_decode($http['body'], true);
     if (isset($response['error'])) {
-        return "Error de la API de Gemini: " . $response['error']['message'];
+        return ['ok' => false, 'text' => 'Error de la API de Gemini: ' . ($response['error']['message'] ?? 'respuesta inválida')];
     }
-
     if (!isset($response['candidates'][0]['content']['parts'][0]['text'])) {
-        return "No se pudo generar un análisis. Respuesta de la API: " . $result;
+        return ['ok' => false, 'text' => 'No se pudo generar un análisis. Respuesta de la API de Gemini: ' . truncate_text($http['body'], 500)];
     }
 
-    return $response['candidates'][0]['content']['parts'][0]['text'];
+    return ['ok' => true, 'text' => $response['candidates'][0]['content']['parts'][0]['text']];
 }
+
+function get_deepseek_summary($content, $api_key, $model, $prompt_template) {
+    if (empty($api_key)) return ['ok' => false, 'text' => 'La API key de DeepSeek no está configurada.'];
+    if (empty($content)) return ['ok' => false, 'text' => 'No hay nada que analizar.'];
+    if (empty($prompt_template)) $prompt_template = load_prompt_template();
+    if (empty($model)) $model = 'deepseek-chat';
+
+    $data = [
+        'model' => $model,
+        'messages' => [
+            ['role' => 'system', 'content' => $prompt_template],
+            ['role' => 'user', 'content' => $content],
+        ],
+        'stream' => false,
+    ];
+    $headers = ['Content-Type: application/json', 'Authorization: Bearer ' . $api_key];
+    $http = nisaba_http_request('https://api.deepseek.com/chat/completions', 'POST', $headers, json_encode($data), 300);
+
+    if ($http['body'] === '') {
+        return ['ok' => false, 'text' => 'Error al contactar la API de DeepSeek' . ($http['error'] !== '' ? ': ' . $http['error'] : '.')];
+    }
+
+    $response = json_decode($http['body'], true);
+    if (isset($response['error'])) {
+        $message = is_array($response['error']) ? ($response['error']['message'] ?? 'respuesta inválida') : (string)$response['error'];
+        return ['ok' => false, 'text' => 'Error de la API de DeepSeek: ' . $message];
+    }
+    if (!isset($response['choices'][0]['message']['content'])) {
+        return ['ok' => false, 'text' => 'No se pudo generar un análisis. Respuesta de la API de DeepSeek: ' . truncate_text($http['body'], 500)];
+    }
+
+    return ['ok' => true, 'text' => (string)$response['choices'][0]['message']['content']];
+}
+
+function get_ai_summary($content, array $ai_settings) {
+    $provider = sanitize_ai_provider($ai_settings['provider'] ?? 'gemini');
+    $prompt = $ai_settings['prompt'] ?? load_prompt_template();
+    if ($provider === 'deepseek') {
+        return get_deepseek_summary($content, $ai_settings['deepseek_api_key'] ?? '', $ai_settings['deepseek_model'] ?? '', $prompt);
+    }
+    return get_gemini_summary($content, $ai_settings['gemini_api_key'] ?? '', $ai_settings['gemini_model'] ?? '', $prompt);
+}
+
 
 function truncate_text($text, $char_limit) {
     if (!is_string($text)) {
@@ -850,6 +860,15 @@ function normalize_feed_text($text) {
     return trim($text);
 }
 
+// The article cache can be tens of MB; load it once per request and share the object between sidebar and views.
+function nisaba_load_cache(string $cacheFile) {
+    static $loaded = [];
+    if (!array_key_exists($cacheFile, $loaded)) {
+        $loaded[$cacheFile] = file_exists($cacheFile) ? @simplexml_load_file($cacheFile) : false;
+    }
+    return $loaded[$cacheFile];
+}
+
 function cached_article_guid($item): string {
     if (!$item instanceof SimpleXMLElement || !isset($item->guid)) {
         return '';
@@ -869,7 +888,7 @@ function cached_article_guid($item): string {
 }
 
 function find_cached_articles_by_guid(SimpleXMLElement $cache_xml, string $article_guid): array {
-    $articles = $cache_xml->xpath('//item[guid="' . htmlspecialchars($article_guid) . '"]');
+    $articles = $cache_xml->xpath('//item[guid=' . xpath_literal($article_guid) . ']');
     if (!empty($articles)) {
         return $articles;
     }
@@ -1065,6 +1084,24 @@ No se han detectado señales de disrupción significativas en este bloque de fue
     return $cached_prompt;
 }
 
+// Quotes a string as an XPath literal so names/URLs with quotes never break (or inject into) a query.
+function xpath_literal($value): string {
+    $value = (string)$value;
+    if (strpos($value, '"') === false) return '"' . $value . '"';
+    if (strpos($value, "'") === false) return "'" . $value . "'";
+    return 'concat("' . str_replace('"', '", \'"\', "', $value) . '")';
+}
+
+// SimpleXMLElement::addChild() does not escape '&' (it leaves the node empty with a warning), so
+// any value coming from users or feeds must be assigned through this helper.
+function xml_add_text_child(SimpleXMLElement $parent, $name, $value) {
+    $child = $parent->addChild($name);
+    if ($child !== null) {
+        $child[0] = (string)$value;
+    }
+    return $child;
+}
+
 function addChildWithCDATA(SimpleXMLElement $parent, $name, $value) {
     $new_child = $parent->addChild($name);
     if ($new_child !== NULL) {
@@ -1170,7 +1207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     $username = trim($_POST['username']);
     $password = $_POST['password'];
     $userFile = DATA_DIR . '/' . $username . '.xml';
-    if (file_exists($userFile)) {
+    if (preg_match('/^[a-zA-Z0-9_]+$/', $username) && file_exists($userFile)) {
         $xml = simplexml_load_file($userFile);
         if (password_verify($password, (string)$xml->password)) {
             $_SESSION['username'] = $username;
@@ -1229,9 +1266,20 @@ if (isset($_SESSION['username'])) {
     $cacheFile = DATA_DIR . '/' . $username . '_cache.xml';
 
 
+    $ai_provider = sanitize_ai_provider(isset($xml_data->settings->ai_provider) ? (string)$xml_data->settings->ai_provider : 'gemini');
     $gemini_api_key = isset($xml_data->settings->gemini_api_key) ? (string)$xml_data->settings->gemini_api_key : '';
     $gemini_model = isset($xml_data->settings->gemini_model) ? (string)$xml_data->settings->gemini_model : 'gemini-1.5-pro-latest';
+    $deepseek_api_key = isset($xml_data->settings->deepseek_api_key) ? (string)$xml_data->settings->deepseek_api_key : '';
+    $deepseek_model = isset($xml_data->settings->deepseek_model) ? (string)$xml_data->settings->deepseek_model : 'deepseek-chat';
     $gemini_prompt = load_prompt_template();
+    $ai_settings = [
+        'provider' => $ai_provider,
+        'gemini_api_key' => $gemini_api_key,
+        'gemini_model' => $gemini_model,
+        'deepseek_api_key' => $deepseek_api_key,
+        'deepseek_model' => $deepseek_model,
+        'prompt' => $gemini_prompt,
+    ];
     $telegram_bot_token = isset($xml_data->settings->telegram_bot_token) ? (string)$xml_data->settings->telegram_bot_token : '';
     $telegram_chat_id = isset($xml_data->settings->telegram_chat_id) ? (string)$xml_data->settings->telegram_chat_id : '';
     $cache_duration = sanitize_cache_duration(isset($xml_data->settings->cache_duration) ? (string)$xml_data->settings->cache_duration : (string)DEFAULT_CACHE_DURATION_HOURS);
@@ -1273,7 +1321,7 @@ if (isset($_SESSION['username'])) {
                 $folder_feed_urls = [];
 
                 if ($scope_view === 'folder' && $scope_folder !== '') {
-                    $feeds_in_folder = $xml_feeds->xpath('//folder[@name="' . htmlspecialchars($scope_folder) . '"]/feed');
+                    $feeds_in_folder = $xml_feeds->xpath('//folder[@name=' . xpath_literal($scope_folder) . ']/feed');
                     foreach ($feeds_in_folder as $feed_node) {
                         $folder_feed_urls[(string)$feed_node['url']] = true;
                     }
@@ -1325,8 +1373,8 @@ if (isset($_SESSION['username'])) {
                 if (!empty($guids_to_persist)) {
                     if (!isset($fresh_xml_data->read_guids)) $fresh_xml_data->addChild('read_guids');
                     foreach ($guids_to_persist as $guid) {
-                         if (count($fresh_xml_data->xpath('//read_guids/guid[.="' . htmlspecialchars($guid) . '"]')) == 0) {
-                            $fresh_xml_data->read_guids->addChild('guid', $guid);
+                         if (count($fresh_xml_data->xpath('//read_guids/guid[.=' . xpath_literal($guid) . ']')) == 0) {
+                            xml_add_text_child($fresh_xml_data->read_guids, 'guid', $guid);
                         }
                     }
                     $fresh_xml_data->asXML($userFile);
@@ -1379,8 +1427,7 @@ if (isset($_SESSION['username'])) {
             }
         }
 
-        $return_url = $_GET['return_url'] ?? 'nisaba.php?view=all_feeds';
-        header('Location: ' . $return_url);
+        header('Location: ' . safe_return_url($_GET['return_url'] ?? ''));
         exit;
     }
 
@@ -1397,8 +1444,8 @@ if (isset($_SESSION['username'])) {
                 if ($fresh_cache_duration === '0') {
                     if (!isset($fresh_xml_data->read_guids)) $fresh_xml_data->addChild('read_guids');
                     $read_guid = cached_article_guid($articles[0]);
-                    if ($read_guid !== '' && count($fresh_xml_data->xpath('//read_guids/guid[.="' . htmlspecialchars($read_guid) . '"]')) == 0) {
-                        $fresh_xml_data->read_guids->addChild('guid', $read_guid);
+                    if ($read_guid !== '' && count($fresh_xml_data->xpath('//read_guids/guid[.=' . xpath_literal($read_guid) . ']')) == 0) {
+                        xml_add_text_child($fresh_xml_data->read_guids, 'guid', $read_guid);
                         $fresh_xml_data->asXML($userFile);
                     }
                     unset($articles[0][0]);
@@ -1416,8 +1463,7 @@ if (isset($_SESSION['username'])) {
             echo json_encode(['status' => 'success']);
             exit;
         }
-        $return_url = $_GET['return_url'] ?? 'nisaba.php?view=all_feeds';
-        header('Location: ' . $return_url);
+        header('Location: ' . safe_return_url($_GET['return_url'] ?? ''));
         exit;
     }
 
@@ -1434,8 +1480,7 @@ if (isset($_SESSION['username'])) {
                 $cache_xml->asXML($cacheFile);
             }
         }
-        $return_url = $_GET['return_url'] ?? 'nisaba.php?view=all_feeds';
-        header('Location: ' . $return_url);
+        header('Location: ' . safe_return_url($_GET['return_url'] ?? ''));
         exit;
     }
 
@@ -1489,8 +1534,8 @@ if (isset($_SESSION['username'])) {
             if (!empty($guids_to_persist)) {
                 if (!isset($xml_data->read_guids)) $xml_data->addChild('read_guids');
                 foreach ($guids_to_persist as $guid) {
-                    if (count($xml_data->xpath('//read_guids/guid[.="' . htmlspecialchars($guid) . '"]')) == 0) {
-                        $xml_data->read_guids->addChild('guid', $guid);
+                    if (count($xml_data->xpath('//read_guids/guid[.=' . xpath_literal($guid) . ']')) == 0) {
+                        xml_add_text_child($xml_data->read_guids, 'guid', $guid);
                     }
                 }
                 $xml_data->asXML($userFile);
@@ -1548,15 +1593,15 @@ if (isset($_SESSION['username'])) {
                 $content = html_entity_decode($parsed_item['content'], ENT_QUOTES | ENT_XML1, 'UTF-8');
                 $summary = html_entity_decode($parsed_item['summary'], ENT_QUOTES | ENT_XML1, 'UTF-8');
 
-                $article->addChild('feed_url', $parsed_item['feed_url']);
+                xml_add_text_child($article, 'feed_url', $parsed_item['feed_url']);
                 addChildWithCDATA($article, 'title_original', $title);
                 addChildWithCDATA($article, 'content_original', $content);
                 addChildWithCDATA($article, 'description_original', $summary);
                 $article->addChild('pubDate', $parsed_item['pubDate']);
-                $article->addChild('guid', $parsed_item['guid']);
-                $article->addChild('link', $parsed_item['link']);
+                xml_add_text_child($article, 'guid', $parsed_item['guid']);
+                xml_add_text_child($article, 'link', $parsed_item['link']);
                 $article->addChild('read', '0');
-                $article->addChild('image', $parsed_item['image']);
+                xml_add_text_child($article, 'image', $parsed_item['image']);
             }
         }
         
@@ -1605,7 +1650,7 @@ if (isset($_SESSION['username'])) {
                         if (isset($external_source->favicon)) {
                             $external_source->favicon = $external_favicon;
                         } else {
-                            $external_source->addChild('favicon', $external_favicon);
+                            xml_add_text_child($external_source, 'favicon', $external_favicon);
                         }
                     }
                 }
@@ -1678,15 +1723,15 @@ if (isset($_SESSION['username'])) {
                     }
 
                     $received_note = $xml_received_notes->addChild('note');
-                    $received_note->addChild('source_name', $source_name);
-                    $received_note->addChild('source_url', $source_url);
+                    xml_add_text_child($received_note, 'source_name', $source_name);
+                    xml_add_text_child($received_note, 'source_url', $source_url);
                     if (!empty($source_favicon)) {
-                        $received_note->addChild('favicon', $source_favicon);
+                        xml_add_text_child($received_note, 'favicon', $source_favicon);
                     }
-                    $received_note->addChild('title', $title);
-                    $received_note->addChild('link', $link);
+                    xml_add_text_child($received_note, 'title', $title);
+                    xml_add_text_child($received_note, 'link', $link);
                     addChildWithCDATA($received_note, 'content', $content);
-                    $received_note->addChild('date', $note_date);
+                    xml_add_text_child($received_note, 'date', $note_date);
                 }
             }
         }
@@ -1715,8 +1760,7 @@ if (isset($_SESSION['username'])) {
             header('Content-Type: application/json');
             echo json_encode(['status' => 'success']);
         } else {
-            $return_url = $_GET['return_url'] ?? 'nisaba.php?view=all_feeds';
-            header('Location: ' . $return_url);
+            header('Location: ' . safe_return_url($_GET['return_url'] ?? ''));
         }
         exit;
     }
@@ -1769,7 +1813,7 @@ if (isset($_SESSION['username'])) {
                                     $feed_title = (string)($entry['text'] ?? $entry['title'] ?? $feed_url);
                                     $favicon_path = get_favicon($feed_url);
                                     $folder_name = $current_folder ?: 'General';
-                                    $folder = $xml_feeds->xpath('//folder[@name="' . htmlspecialchars($folder_name) . '"]');
+                                    $folder = $xml_feeds->xpath('//folder[@name=' . xpath_literal($folder_name) . ']');
                                     $folder_node = !empty($folder) ? $folder[0] : $xml_feeds->addChild('folder');
                                     if (empty($folder)) $folder_node->addAttribute('name', $folder_name);
                                     $new_feed = $folder_node->addChild('feed');
@@ -1807,31 +1851,31 @@ if (isset($_SESSION['username'])) {
             }
             if ($note_title === '') {
                 $_SESSION['notes_feedback'] = ['type' => 'error', 'message' => 'La nota necesita un título.'];
-                header('Location: ' . ($_POST['return_url'] ?? 'nisaba.php?article_guid=' . urlencode($guid)));
+                header('Location: ' . safe_return_url($_POST['return_url'] ?? '', 'nisaba.php?article_guid=' . urlencode($guid)));
                 exit;
             }
-            $existing_note = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
+            $existing_note = $xml_notes->xpath('//note[article_guid=' . xpath_literal($guid) . ']');
             if (!empty($existing_note)) {
                 $existing_note[0]->article_title = $note_title;
                 $existing_note[0]->content = $note_content;
                 if (isset($existing_note[0]->image_url)) {
                     $existing_note[0]->image_url = $note_image_url;
                 } else {
-                    $existing_note[0]->addChild('image_url', htmlspecialchars($note_image_url));
+                    xml_add_text_child($existing_note[0], 'image_url', $note_image_url);
                 }
             } else {
                 $note = $xml_notes->addChild('note');
-                $note->addChild('article_guid', $guid);
-                $note->addChild('article_title', $note_title);
-                $note->addChild('article_link', $_POST['article_link']);
-                $note->addChild('content', $note_content);
-                $note->addChild('image_url', htmlspecialchars($note_image_url));
-                $note->addChild('date', date('c'));
+                xml_add_text_child($note, 'article_guid', $guid);
+                xml_add_text_child($note, 'article_title', $note_title);
+                xml_add_text_child($note, 'article_link', trim($_POST['article_link'] ?? ''));
+                xml_add_text_child($note, 'content', $note_content);
+                xml_add_text_child($note, 'image_url', $note_image_url);
+                xml_add_text_child($note, 'date', date('c'));
             }
             $xml_notes->asXML($notesFile);
             generate_notes_rss($xml_data, $xml_notes, $username);
             $_SESSION['notes_feedback'] = ['type' => 'success', 'message' => 'Nota guardada con éxito. Puedes ver todas en la sección «Notas».'];
-            header('Location: ' . ($_POST['return_url'] ?? 'nisaba.php?article_guid=' . urlencode($guid)));
+            header('Location: ' . safe_return_url($_POST['return_url'] ?? '', 'nisaba.php?article_guid=' . urlencode($guid)));
             exit;
         }
 
@@ -1845,14 +1889,14 @@ if (isset($_SESSION['username'])) {
                 header('Location: nisaba.php?view=notes');
                 exit;
             }
-            $note_to_edit = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
+            $note_to_edit = $xml_notes->xpath('//note[article_guid=' . xpath_literal($guid) . ']');
             if (!empty($note_to_edit)) {
                 $note_to_edit[0]->article_title = $new_title;
                 $note_to_edit[0]->content = $new_content;
                 if (isset($note_to_edit[0]->image_url)) {
                     $note_to_edit[0]->image_url = $new_image_url;
                 } else {
-                    $note_to_edit[0]->addChild('image_url', htmlspecialchars($new_image_url));
+                    xml_add_text_child($note_to_edit[0], 'image_url', $new_image_url);
                 }
             }
             $xml_notes->asXML($notesFile);
@@ -1863,7 +1907,7 @@ if (isset($_SESSION['username'])) {
 
         if (isset($_POST['delete_note'])) {
             $guid = $_POST['delete_note'];
-            $notes = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
+            $notes = $xml_notes->xpath('//note[article_guid=' . xpath_literal($guid) . ']');
             if (!empty($notes)) {
                 unset($notes[0][0]);
             }
@@ -1875,7 +1919,7 @@ if (isset($_SESSION['username'])) {
 
         if (isset($_POST['send_to_telegram'])) {
             $guid = $_POST['send_to_telegram'];
-            $note_to_send = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($guid) . '"]');
+            $note_to_send = $xml_notes->xpath('//note[article_guid=' . xpath_literal($guid) . ']');
             
             if (!empty($note_to_send)) {
                 $telegram_bot_token = isset($xml_data->settings->telegram_bot_token) ? (string)$xml_data->settings->telegram_bot_token : '';
@@ -1911,10 +1955,8 @@ if (isset($_SESSION['username'])) {
 
             if (isset($_FILES['user_favicon']) && $_FILES['user_favicon']['error'] === UPLOAD_ERR_OK) {
                 $file = $_FILES['user_favicon'];
-                $allowed_types = ['image/png', 'image/jpeg', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/svg+xml', 'image/webp'];
-                if (in_array($file['type'], $allowed_types) && $file['size'] < 1048576) { // 1MB limit
-                    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-                    if (empty($extension)) $extension = 'png';
+                $extension = uploaded_image_extension($file); // 1MB limit
+                if ($extension !== '') {
                     $filename = 'userfav_' . hash('md5', $username) . '.' . $extension;
                     $save_path = FAVICON_DIR . '/' . $filename;
                     if (move_uploaded_file($file['tmp_name'], $save_path)) {
@@ -1932,6 +1974,15 @@ if (isset($_SESSION['username'])) {
 
             if (isset($_POST['gemini_model'])) {
                 $xml_data->settings->gemini_model = $_POST['gemini_model'];
+            }
+            if (isset($_POST['ai_provider'])) {
+                $xml_data->settings->ai_provider = sanitize_ai_provider($_POST['ai_provider']);
+            }
+            if (isset($_POST['deepseek_api_key']) && !empty($_POST['deepseek_api_key'])) {
+                $xml_data->settings->deepseek_api_key = trim($_POST['deepseek_api_key']);
+            }
+            if (isset($_POST['deepseek_model'])) {
+                $xml_data->settings->deepseek_model = trim($_POST['deepseek_model']);
             }
             if (isset($_POST['telegram_bot_token']) && !empty($_POST['telegram_bot_token'])) {
                 $xml_data->settings->telegram_bot_token = $_POST['telegram_bot_token'];
@@ -1992,10 +2043,8 @@ if (isset($_SESSION['username'])) {
 
                 if (isset($_FILES['new_favicon']) && $_FILES['new_favicon']['error'] === UPLOAD_ERR_OK) {
                     $file = $_FILES['new_favicon'];
-                    $allowed_types = ['image/png', 'image/jpeg', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/svg+xml', 'image/webp'];
-                    if (in_array($file['type'], $allowed_types) && $file['size'] < 1048576) { // 1MB limit
-                        $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-                        if (empty($extension)) $extension = 'png';
+                    $extension = uploaded_image_extension($file); // 1MB limit
+                    if ($extension !== '') {
                         $filename = 'extfav_edited_' . hash('md5', $normalized_url) . '.' . $extension;
                         $save_path = FAVICON_DIR . '/' . $filename;
                         if (move_uploaded_file($file['tmp_name'], $save_path)) {
@@ -2003,7 +2052,7 @@ if (isset($_SESSION['username'])) {
                             if (isset($source_to_edit->favicon)) {
                                 $source_to_edit->favicon = $favicon_path;
                             } else {
-                                $source_to_edit->addChild('favicon', $favicon_path);
+                                xml_add_text_child($source_to_edit, 'favicon', $favicon_path);
                             }
                         }
                     }
@@ -2089,16 +2138,16 @@ if (isset($_SESSION['username'])) {
                     if (isset($existing_source->favicon)) {
                         $existing_source->favicon = $external_favicon;
                     } else {
-                        $existing_source->addChild('favicon', $external_favicon);
+                        xml_add_text_child($existing_source, 'favicon', $external_favicon);
                     }
                 }
                 $_SESSION['feed_success'] = 'Fuente de notas externas actualizada: ' . htmlspecialchars($external_name) . '.';
             } else {
                 $new_source = $sources_node->addChild('source');
-                $new_source->addChild('name', $external_name);
-                $new_source->addChild('url', $normalized_url);
+                xml_add_text_child($new_source, 'name', $external_name);
+                xml_add_text_child($new_source, 'url', $normalized_url);
                 if (!empty($external_favicon)) {
-                    $new_source->addChild('favicon', $external_favicon);
+                    xml_add_text_child($new_source, 'favicon', $external_favicon);
                 }
                 $_SESSION['feed_success'] = 'Ahora sigues las notas de: ' . htmlspecialchars($external_name) . '.';
             }
@@ -2143,15 +2192,14 @@ if (isset($_SESSION['username'])) {
             if (empty($feed_url) || !filter_var($feed_url, FILTER_VALIDATE_URL)) {
                 $feed_error = 'Por favor, introduce una URL de feed válida.';
             } else {
-                if (count($xml_feeds->xpath('//feed[@url="' . htmlspecialchars($feed_url) . '"]')) > 0) {
+                if (count($xml_feeds->xpath('//feed[@url=' . xpath_literal($feed_url) . ']')) > 0) {
                     $feed_error = 'Ya estás suscrito a este feed.';
                 } else {
                     $feed_title = $feed_url;
-                    $context = stream_context_create(['http' => ['user_agent' => 'Nisaba Feed Reader']]);
-                    $feed_content = @file_get_contents($feed_url, false, $context);
+                    $feed_content = fetch_feed_content($feed_url);
                     $feed_lang = '';
                     if ($feed_content) {
-                        $feed_xml = @simplexml_load_string($feed_content);
+                        $feed_xml = normalize_feed_content($feed_content, $feed_url);
                         if ($feed_xml) {
                             if (isset($feed_xml->channel->title)) {
                                 $feed_title = (string)$feed_xml->channel->title;
@@ -2169,7 +2217,7 @@ if (isset($_SESSION['username'])) {
                         }
                     }
                     $favicon_path = get_favicon($feed_url);
-                    $folder = $xml_feeds->xpath('//folder[@name="' . htmlspecialchars($folder_name) . '"]');
+                    $folder = $xml_feeds->xpath('//folder[@name=' . xpath_literal($folder_name) . ']');
                     $folder_node = !empty($folder) ? $folder[0] : $xml_feeds->addChild('folder');
                     if (empty($folder)) $folder_node->addAttribute('name', $folder_name);
                     $new_feed = $folder_node->addChild('feed');
@@ -2186,7 +2234,7 @@ if (isset($_SESSION['username'])) {
 
         if (isset($_POST['delete_feed'])) {
             $feed_url = $_POST['feed_url'];
-            $feeds = $xml_feeds->xpath('//feed[@url="' . htmlspecialchars($feed_url) . '"]');
+            $feeds = $xml_feeds->xpath('//feed[@url=' . xpath_literal($feed_url) . ']');
             if (!empty($feeds)) {
                 $parent = $feeds[0]->xpath('parent::*')[0];
                 unset($feeds[0][0]);
@@ -2202,16 +2250,16 @@ if (isset($_SESSION['username'])) {
             $new_name = trim($_POST['feed_name']);
             $new_folder_name = trim($_POST['folder_name']);
             if(empty($new_folder_name)) $new_folder_name = 'General';
-            $feeds = $xml_feeds->xpath('//feed[@url="' . htmlspecialchars($original_url) . '"]');
+            $feeds = $xml_feeds->xpath('//feed[@url=' . xpath_literal($original_url) . ']');
             if (!empty($feeds)) {
                 $feed_node = $feeds[0];
                 $feed_node['name'] = $new_name;
 
                 if (isset($_FILES['new_favicon']) && $_FILES['new_favicon']['error'] === UPLOAD_ERR_OK) {
                     $file = $_FILES['new_favicon'];
-                    $allowed_types = ['image/png', 'image/jpeg', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/svg+xml', 'image/webp'];
-                    if (in_array($file['type'], $allowed_types) && $file['size'] < 1000000) { // 1MB limit
-                        $filename = hash('md5', $original_url) . '_' . time() . '_' . basename($file['name']);
+                    $extension = uploaded_image_extension($file); // 1MB limit
+                    if ($extension !== '') {
+                        $filename = hash('md5', $original_url) . '_' . time() . '_favicon.' . $extension;
                         $save_path = FAVICON_DIR . '/' . $filename;
                         if (move_uploaded_file($file['tmp_name'], $save_path)) {
                             $feed_node['favicon'] = 'data/favicons/' . $filename;
@@ -2222,7 +2270,7 @@ if (isset($_SESSION['username'])) {
                 $old_folder = $feed_node->xpath('parent::*')[0];
                 $old_folder_name = (string)$old_folder['name'];
                 if ($old_folder_name !== $new_folder_name) {
-                    $new_folder = $xml_feeds->xpath('//folder[@name="' . htmlspecialchars($new_folder_name) . '"]');
+                    $new_folder = $xml_feeds->xpath('//folder[@name=' . xpath_literal($new_folder_name) . ']');
                     $new_folder_node = !empty($new_folder) ? $new_folder[0] : $xml_feeds->addChild('folder');
                     if (empty($new_folder)) $new_folder_node->addAttribute('name', $new_folder_name);
                     $dom_feed = dom_import_simplexml($feed_node);
@@ -2630,7 +2678,7 @@ $notes_stack_received_style = 'height:' . $compute_stack_height($received_entrie
 
 $sidebar_unread_by_feed = [];
 if (file_exists($cacheFile)) {
-    $sidebar_cache_snapshot = @simplexml_load_file($cacheFile);
+    $sidebar_cache_snapshot = nisaba_load_cache($cacheFile);
     if ($sidebar_cache_snapshot) {
         foreach ($sidebar_cache_snapshot->item as $cached_item) {
             if ((string)$cached_item->read === '0' && cached_article_guid($cached_item) !== '') {
@@ -2808,8 +2856,9 @@ $current_feed = $_GET['feed'] ?? '';
                     <h2>Nisaba</h2>
                     <?php
                     $has_any_unread = false;
+                    set_time_limit(600);
                     if (file_exists($cacheFile)) {
-                        $cache_xml = simplexml_load_file($cacheFile);
+                        $cache_xml = nisaba_load_cache($cacheFile);
                         if($cache_xml) {
                             $current_update_id = isset($xml_data->settings->last_update_id) ? (string)$xml_data->settings->last_update_id : '';
 
@@ -2819,7 +2868,7 @@ $current_feed = $_GET['feed'] ?? '';
                                 $title_to_guid_map = [];
                                 foreach ($folder->feed as $feed) {
                                     $feed_url = (string)$feed['url'];
-                                    $unread_articles = $cache_xml->xpath('//item[read="0" and feed_url="' . $feed_url . '"]');
+                                    $unread_articles = $cache_xml->xpath('//item[read="0" and feed_url=' . xpath_literal($feed_url) . ']');
                                     foreach ($unread_articles as $item) {
                                         $title = $item->title_original;
                                         $content = $item->content_original;
@@ -2835,7 +2884,7 @@ $current_feed = $_GET['feed'] ?? '';
                                     $summary_text = '';
                                     $existing_summary = null;
                                     if (!empty($current_update_id)) {
-                                         $summaries = $xml_summaries->xpath('//summary[@folder="' . htmlspecialchars($folder_name) . '" and @update_id="' . $current_update_id . '"]');
+                                         $summaries = $xml_summaries->xpath('//summary[@folder=' . xpath_literal($folder_name) . ' and @update_id=' . xpath_literal($current_update_id) . ']');
                                          if (!empty($summaries)) {
                                              $existing_summary = $summaries[0];
                                          }
@@ -2850,9 +2899,10 @@ $current_feed = $_GET['feed'] ?? '';
                                             }
                                         }
                                     } else {
-                                        $summary_text = get_gemini_summary($content_for_folder, $gemini_api_key, $gemini_model, $gemini_prompt);
-                                        if (!str_starts_with($summary_text, 'Error')) {
-                                            $all_summaries_for_folder = $xml_summaries->xpath('//summary[@folder="' . htmlspecialchars($folder_name) . '"]');
+                                        $ai_result = get_ai_summary($content_for_folder, $ai_settings);
+                                        $summary_text = $ai_result['text'];
+                                        if ($ai_result['ok']) {
+                                            $all_summaries_for_folder = $xml_summaries->xpath('//summary[@folder=' . xpath_literal($folder_name) . ']');
                                             usort($all_summaries_for_folder, function($a, $b) { return strtotime((string)$b['date']) - strtotime((string)$a['date']); });
 
                                             while (count($all_summaries_for_folder) >= 8) {
@@ -2890,7 +2940,7 @@ $current_feed = $_GET['feed'] ?? '';
                                     $note_title = "Análisis de la carpeta: " . htmlspecialchars($folder_name);
                                     $note_link = "nisaba.php?view=nisaba_summary";
                                     $note_text = '';
-                                    $notes = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($note_guid) . '"]');
+                                    $notes = $xml_notes->xpath('//note[article_guid=' . xpath_literal($note_guid) . ']');
                                     if (!empty($notes)) $note_text = (string)$notes[0]->content;
 
                                     echo '<form method="POST" action="nisaba.php?view=nisaba_summary" class="note-form" style="margin-top: 1em;">';
@@ -2906,7 +2956,7 @@ $current_feed = $_GET['feed'] ?? '';
 
                                     echo '<hr>';
                                 } else {
-                                    $summaries_for_folder = $xml_summaries->xpath('//summary[@folder="' . htmlspecialchars($folder_name) . '"]');
+                                    $summaries_for_folder = $xml_summaries->xpath('//summary[@folder=' . xpath_literal($folder_name) . ']');
                                     if (!empty($summaries_for_folder)) {
                                         $has_any_unread = true; // Mark as having content to show
                                         usort($summaries_for_folder, function($a, $b) {
@@ -2933,7 +2983,7 @@ $current_feed = $_GET['feed'] ?? '';
                                         $note_title = "Análisis de la carpeta: " . htmlspecialchars($folder_name);
                                         $note_link = "nisaba.php?view=nisaba_summary";
                                         $note_text = '';
-                                        $notes = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($note_guid) . '"]');
+                                        $notes = $xml_notes->xpath('//note[article_guid=' . xpath_literal($note_guid) . ']');
                                         if (!empty($notes)) $note_text = (string)$notes[0]->content;
 
                                         echo '<form method="POST" action="nisaba.php?view=nisaba_summary" class="note-form" style="margin-top: 1em;">';
@@ -2969,7 +3019,7 @@ $current_feed = $_GET['feed'] ?? '';
         $fresh_cache_duration = sanitize_cache_duration(isset($fresh_xml_data->settings->cache_duration) ? (string)$fresh_xml_data->settings->cache_duration : (string)DEFAULT_CACHE_DURATION_HOURS);
 
                         if (file_exists($cacheFile)) {
-                            $cache_xml = simplexml_load_file($cacheFile);
+                            $cache_xml = nisaba_load_cache($cacheFile);
                             if($cache_xml) {
                                 $articles = find_cached_articles_by_guid($cache_xml, $article_guid);
                                 if(!empty($articles)) {
@@ -2979,8 +3029,8 @@ $current_feed = $_GET['feed'] ?? '';
                                     if ($fresh_cache_duration === '0') {
                                         if (!isset($fresh_xml_data->read_guids)) $fresh_xml_data->addChild('read_guids');
                                         $read_guid = cached_article_guid($articles[0]);
-                                        if ($read_guid !== '' && count($fresh_xml_data->xpath('//read_guids/guid[.="' . htmlspecialchars($read_guid) . '"]')) == 0) {
-                                            $fresh_xml_data->read_guids->addChild('guid', $read_guid);
+                                        if ($read_guid !== '' && count($fresh_xml_data->xpath('//read_guids/guid[.=' . xpath_literal($read_guid) . ']')) == 0) {
+                                            xml_add_text_child($fresh_xml_data->read_guids, 'guid', $read_guid);
                                             $fresh_xml_data->asXML($userFile);
                                         }
                                         unset($articles[0][0]);
@@ -2994,7 +3044,7 @@ $current_feed = $_GET['feed'] ?? '';
 
                                     // Get favicon from the cloned object
                                     $feed_url = (string)$article->feed_url;
-                                    $feeds = $xml_feeds->xpath('//feed[@url="' . htmlspecialchars($feed_url) . '"]');
+                                    $feeds = $xml_feeds->xpath('//feed[@url=' . xpath_literal($feed_url) . ']');
                                     if (!empty($feeds)) {
                                         $favicon_url = (string)$feeds[0]['favicon'];
                                     }
@@ -3073,7 +3123,7 @@ $current_feed = $_GET['feed'] ?? '';
                                 $note_title = '';
                                 $note_text = '';
                                 $note_image_url = '';
-                                $notes = $xml_notes->xpath('//note[article_guid="' . htmlspecialchars($article_cache_guid) . '"]');
+                                $notes = $xml_notes->xpath('//note[article_guid=' . xpath_literal($article_cache_guid) . ']');
                                 if (!empty($notes)) {
                                     $note_title = (string)$notes[0]->article_title;
                                     $note_text = (string)$notes[0]->content;
@@ -3102,7 +3152,7 @@ $current_feed = $_GET['feed'] ?? '';
                     <?php
                         $unread_count = 0;
                         if (file_exists($cacheFile)) {
-                            $count_cache_xml = simplexml_load_file($cacheFile);
+                            $count_cache_xml = nisaba_load_cache($cacheFile);
                             if ($count_cache_xml) {
                                 foreach ($count_cache_xml->item as $count_item) {
                                     if ((string)$count_item->read === '0' && cached_article_guid($count_item) !== '') {
@@ -3116,7 +3166,7 @@ $current_feed = $_GET['feed'] ?? '';
                     <ul class="article-list">
                         <?php
                         if (isset($cacheFile) && file_exists($cacheFile)) {
-                            $cache_xml = simplexml_load_file($cacheFile);
+                            $cache_xml = nisaba_load_cache($cacheFile);
                             if($cache_xml) {
                                 $articles = $cache_xml->xpath('//item');
                                 if (empty($articles)) { echo "<li>No hay artículos por leer. Prueba a actualizar las feeds.</li>"; } 
@@ -3175,12 +3225,12 @@ $current_feed = $_GET['feed'] ?? '';
                         $folder_name = isset($_GET['name']) ? $_GET['name'] : '';
                         $unread_count = 0;
                         if (file_exists($cacheFile) && !empty($folder_name)) {
-                            $feeds_in_folder = $xml_feeds->xpath('//folder[@name="' . htmlspecialchars($folder_name) . '"]/feed');
+                            $feeds_in_folder = $xml_feeds->xpath('//folder[@name=' . xpath_literal($folder_name) . ']/feed');
                             $feed_urls = [];
                             foreach ($feeds_in_folder as $feed) {
                                 $feed_urls[] = (string)$feed['url'];
                             }
-                            $count_cache_xml = simplexml_load_file($cacheFile);
+                            $count_cache_xml = nisaba_load_cache($cacheFile);
                             if (!empty($feed_urls) && $count_cache_xml) {
                                 $folder_feed_url_map = array_flip($feed_urls);
                                 foreach ($count_cache_xml->item as $count_item) {
@@ -3199,16 +3249,16 @@ $current_feed = $_GET['feed'] ?? '';
                     <ul class="article-list">
                         <?php
                         if (isset($cacheFile) && file_exists($cacheFile) && !empty($folder_name)) {
-                            $feeds_in_folder = $xml_feeds->xpath('//folder[ @name="' . htmlspecialchars($folder_name) . '"]/feed');
+                            $feeds_in_folder = $xml_feeds->xpath('//folder[ @name=' . xpath_literal($folder_name) . ']/feed');
                             $feed_urls = [];
                             foreach ($feeds_in_folder as $feed) {
                                 $feed_urls[] = (string)$feed['url'];
                             }
-                            $cache_xml = simplexml_load_file($cacheFile);
+                            $cache_xml = nisaba_load_cache($cacheFile);
                             $articles = [];
                             if (!empty($feed_urls) && $cache_xml) {
                                 $xpath_query = '//item[' . implode(' or ', array_map(function($url) {
-                                    return 'feed_url="' . $url . '"';
+                                    return 'feed_url=' . xpath_literal($url);
                                 }, $feed_urls)) . ']';
                                 $articles = $cache_xml->xpath($xpath_query);
                             }
@@ -3269,14 +3319,14 @@ $current_feed = $_GET['feed'] ?? '';
                         $favicon_url = 'nisaba.png';
                         $unread_count = 0;
 
-                        $feeds = $xml_feeds->xpath('//feed[ @url="' . htmlspecialchars($selected_feed_url) . '"]');
+                        $feeds = $xml_feeds->xpath('//feed[ @url=' . xpath_literal($selected_feed_url) . ']');
                         if (!empty($feeds)) {
                             $feed_name = (string)$feeds[0]['name'];
                             $favicon_url = (string)$feeds[0]['favicon'];
                         }
 
                         if (file_exists($cacheFile)) {
-                            $count_cache_xml = simplexml_load_file($cacheFile);
+                            $count_cache_xml = nisaba_load_cache($cacheFile);
                             if ($count_cache_xml) {
                                 foreach ($count_cache_xml->item as $count_item) {
                                     if (
@@ -3295,9 +3345,9 @@ $current_feed = $_GET['feed'] ?? '';
                     <ul class="article-list">
                         <?php
                         if (file_exists($cacheFile)) {
-                            $cache_xml = simplexml_load_file($cacheFile);
+                            $cache_xml = nisaba_load_cache($cacheFile);
                             if($cache_xml){
-                                $articles = $cache_xml->xpath('//item[feed_url="' . $selected_feed_url . '"]');
+                                $articles = $cache_xml->xpath('//item[feed_url=' . xpath_literal($selected_feed_url) . ']');
                                 if (empty($articles)) { echo "<li>No hay artículos por leer. Actualiza las feeds.</li>"; } 
                                 else {
                                     $sorted_articles = [];
@@ -3487,39 +3537,48 @@ $current_feed = $_GET['feed'] ?? '';
                         </div>
                         <hr>
                         <div class="form-group">
+                            <label for="ai_provider">Proveedor de IA para los análisis</label>
+                            <select id="ai_provider" name="ai_provider" class="form-group input">
+                                <?php foreach (nisaba_ai_providers() as $provider_id => $provider_label): ?>
+                                    <option value="<?php echo $provider_id; ?>"<?php echo ($ai_provider === $provider_id) ? ' selected' : ''; ?>><?php echo htmlspecialchars($provider_label); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p style="font-size: 0.8em; color: #555;">Elige qué servicio genera los análisis. Puedes guardar las claves de ambos y cambiar de uno a otro cuando quieras.</p>
+                        </div>
+
+                        <div class="ai-provider-block" data-provider="gemini">
+                        <div class="form-group">
                             <label for="gemini_api_key">API Key de Google Gemini</label>
                             <input type="password" id="gemini_api_key" name="gemini_api_key" placeholder="Dejar en blanco para no cambiar" class="form-group input">
-                            <?php if (isset($xml_data->settings->gemini_api_key) && !empty((string)$xml_data->settings->gemini_api_key)): ?>
-                                <p style="font-size: 0.8em; color: #555;">API Key guardada: <?php echo mask_api_key((string)$xml_data->settings->gemini_api_key); ?></p>
+                            <?php if ($gemini_api_key !== ''): ?>
+                                <p style="font-size: 0.8em; color: #555;">API Key guardada: <?php echo mask_api_key($gemini_api_key); ?></p>
                             <?php endif; ?>
+                            <p style="font-size: 0.8em; color: #555;">Consíguela en <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.</p>
                         </div>
                         <div class="form-group">
                             <label for="gemini_model">Modelo de Gemini</label>
                             <select id="gemini_model" name="gemini_model" class="form-group input">
-                                <?php
-                                    $available_models = get_gemini_models($gemini_api_key);
-                                    $selected_model = isset($xml_data->settings->gemini_model) ? (string)$xml_data->settings->gemini_model : '';
-
-                                    if (!empty($available_models)) {
-                                        if (empty($selected_model)) $selected_model = $available_models[0]['id']; // Default to first model in list
-                                        foreach($available_models as $model) {
-                                            echo '<option value="' . htmlspecialchars($model['id']) . '"' . ($selected_model === $model['id'] ? ' selected' : '') . '>' . htmlspecialchars($model['name']) . '</option>';
-                                        }
-                                    } else {
-                                        // Fallback if API key is not set or API call fails
-                                        $default_models = ['gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-pro'];
-                                        if (empty($selected_model) || !in_array($selected_model, $default_models)) $selected_model = 'gemini-1.5-pro-latest';
-                                        foreach($default_models as $model_id) {
-                                             echo '<option value="' . $model_id . '"' . ($selected_model === $model_id ? ' selected' : '') . '>' . $model_id . '</option>';
-                                        }
-                                        if (empty($gemini_api_key)) {
-                                            echo '<option value="" disabled>Introduce una API key para ver los modelos</option>';
-                                        } else {
-                                            echo '<option value="" disabled>No se pudieron cargar los modelos desde la API</option>';
-                                        }
-                                    }
-                                ?>
+                                <?php echo render_model_options(get_gemini_models($gemini_api_key), nisaba_default_models('gemini'), $gemini_model, $gemini_api_key); ?>
                             </select>
+                        </div>
+                        </div>
+
+                        <div class="ai-provider-block" data-provider="deepseek">
+                        <div class="form-group">
+                            <label for="deepseek_api_key">API Key de DeepSeek</label>
+                            <input type="password" id="deepseek_api_key" name="deepseek_api_key" placeholder="Dejar en blanco para no cambiar" class="form-group input">
+                            <?php if ($deepseek_api_key !== ''): ?>
+                                <p style="font-size: 0.8em; color: #555;">API Key guardada: <?php echo mask_api_key($deepseek_api_key); ?></p>
+                            <?php endif; ?>
+                            <p style="font-size: 0.8em; color: #555;">Consíguela en <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer">platform.deepseek.com</a>.</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="deepseek_model">Modelo de DeepSeek</label>
+                            <select id="deepseek_model" name="deepseek_model" class="form-group input">
+                                <?php echo render_model_options(get_deepseek_models($deepseek_api_key), nisaba_default_models('deepseek'), $deepseek_model, $deepseek_api_key); ?>
+                            </select>
+                            <p style="font-size: 0.8em; color: #555;"><code>deepseek-chat</code> es rápido y económico; <code>deepseek-reasoner</code> razona más pero tarda bastante más por carpeta.</p>
+                        </div>
                         </div>
 
                         <div class="form-group">
@@ -3596,7 +3655,7 @@ $current_feed = $_GET['feed'] ?? '';
                     <hr/>
                     
                         <div class="form-group">
-                            <h4>Prompt para el análisis de Gemini</h4>
+                            <h4>Prompt para el análisis de IA</h4>
                             <div class="summary-container">
                                 <button class="copy-btn" onclick="copySummary(this)">Copiar</button>
                                 <div class="summary-box"><pre class="summary-content"><?php echo htmlspecialchars($gemini_prompt); ?></pre></div>
@@ -3622,7 +3681,7 @@ $current_feed = $_GET['feed'] ?? '';
                                             <input type="text" name="feed_name" value="<?php echo htmlspecialchars($feed['name']); ?>">
                                             <input type="text" name="feed_favicon" value="<?php echo htmlspecialchars($feed['favicon']); ?>">
                                             <input type="text" name="folder_name" value="<?php echo htmlspecialchars($folder['name']); ?>">
-                                            <input type="text" name="feed_lang" value="<?php echo htmlspecialchars($feed['lang']); ?>">
+                                            <input type="text" name="feed_lang" value="<?php echo htmlspecialchars((string)$feed['lang']); ?>">
                                         </div>
                                         <button onclick="openEditModal(this)" class="btn btn-outline-secondary btn-sm">Editar</button>
                                         <form method="POST" action="nisaba.php" onsubmit="return confirm('¿Seguro que quieres eliminar este feed?');">
@@ -3952,6 +4011,18 @@ $current_feed = $_GET['feed'] ?? '';
                     localStorage.setItem('nisabaTheme', nextTheme);
                     applyTheme(nextTheme);
                 });
+            }
+
+            // AI provider blocks in settings
+            const providerSelect = document.getElementById('ai_provider');
+            if (providerSelect) {
+                const syncProviderBlocks = () => {
+                    document.querySelectorAll('.ai-provider-block').forEach(block => {
+                        block.style.display = (block.dataset.provider === providerSelect.value) ? '' : 'none';
+                    });
+                };
+                providerSelect.addEventListener('change', syncProviderBlocks);
+                syncProviderBlocks();
             }
 
             // Font size controls

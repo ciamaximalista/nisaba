@@ -10,7 +10,7 @@ $search_results = [];
 $search_performed = !empty($search_query);
 
 if ($search_performed && file_exists($cacheFile)) {
-    $cache_xml = simplexml_load_file($cacheFile);
+    $cache_xml = nisaba_load_cache($cacheFile);
     if ($cache_xml) {
         $keywords = array_filter(explode(' ', $search_query));
         if (!empty($keywords)) {

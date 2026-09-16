@@ -30,7 +30,7 @@ Configurado por defecto para analizar la situación global, Nisaba puede persona
 - **Buscador Integrado**: Un potente buscador que te permite encontrar artículos en toda tu caché buscando por palabras clave en títulos y contenido. Los resultados incluyen artículos leídos (marcados visualmente) para que no pierdas ninguna información.
 - **Caché Configurable**: Elige si los artículos leídos se ocultan inmediatamente o si permanecen visibles (en gris) durante 24 o 48 horas antes de ser eliminados de la caché.
 - **Traducción Integrada con el Navegador**: En lugar de usar una API externa, Nisaba le indica a tu navegador el idioma del contenido para que puedas usar su función de traducción nativa, instantánea y gratuita.
-- **Análisis con IA**: Utiliza la API de Google Gemini para generar análisis estratégicos y encontrar elementos  disruptivos y cambios de tendencias en tus artículos no leídos, agrupados por carpeta.
+- **Análisis con IA**: Utiliza la API de Google Gemini o la de DeepSeek (a elegir en la configuración) para generar análisis estratégicos y encontrar elementos  disruptivos y cambios de tendencias en tus artículos no leídos, agrupados por carpeta.
 - **Notas Personales**: Toma notas sobre cualquier artículo o resumen. Tus notas se guardan y son accesibles en cualquier momento.
 - **Enviar tus notas a Telegram**: Puedes compartir tus notas y los enlaces que comentan en un grupo o canal de Telegram con tan sólo pulsar un botón.
 - **Recibir Notas y Análisis**: Puedes suscribirte a las notas de otros usuarios para leer y analizar en equipo.
@@ -48,7 +48,7 @@ Antes de empezar, asegúrate de que tu servidor cumple con los siguientes requis
 
 - **Servidor Web**: Un servidor web como Apache o Nginx con soporte para PHP 8.0 o superior.
 - **Extensiones de PHP**:
-    - `curl`: Necesaria para la traducción automática y para comunicarse con la API de Gemini.
+    - `curl`: Necesaria para descargar los feeds y para comunicarse con las APIs de Gemini o DeepSeek.
     - `dom`: Para procesar los feeds RSS/Atom.
     - `simplexml`: El motor principal para leer y escribir los archivos de datos.
     - `mbstring`: Para el manejo correcto de caracteres multibyte.
@@ -84,16 +84,15 @@ Antes de empezar, asegúrate de que tu servidor cumple con los siguientes requis
     - La primera vez que accedas, se te presentará un formulario para crear la cuenta de administrador. Este será el único usuario de la aplicación.
     - Introduce un nombre de usuario y una contraseña segura y haz clic en "Registrar".
 
-### 3. Configuración de las APIs de Google
+### 3. Configuración de la IA (Gemini o DeepSeek)
 
-Para desbloquear las funcionalidades de traducción e inteligencia artificial, necesitas configurar las APIs de Google.
+Para desbloquear la función "Análisis" necesitas una clave de API de uno de los dos proveedores soportados. Puedes guardar las claves de ambos y elegir en cualquier momento cuál se usa.
 
 1.  **Inicia Sesión** en tu instancia de Nisaba.
 2.  En el menú de la izquierda, haz clic en **"Configuración y Preferencias"**.
+3.  En **"Proveedor de IA para los análisis"** elige *Google Gemini* o *DeepSeek*. Sólo se muestran los campos del proveedor elegido.
 
-#### a) API Key de Google Gemini (para Análisis con IA)
-
-Esta API te permite usar la función "Análisis" para obtener resúmenes estratégicos de tus noticias.
+#### a) Google Gemini
 
 1.  **Obtén tu API Key**:
     - Ve a [Google AI Studio](https://aistudio.google.com/app/apikey).
@@ -101,12 +100,21 @@ Esta API te permite usar la función "Análisis" para obtener resúmenes estrat�
     - Haz clic en "Create API key in new project".
     - Copia la clave que se genera.
 2.  **Guárdala en Nisaba**:
-    - En la página de configuración de Nisaba, pega la clave en el campo "API Key de Google Gemini".
-    - Selecciona el modelo de Gemini que prefieras (por ejemplo, `gemini-1.5-pro-latest`).
-    - Opcionalmente, puedes personalizar el *prompt* que se usa para generar los análisis para adaptarlo a tus intereses.
+    - Pega la clave en el campo "API Key de Google Gemini".
+    - Selecciona el modelo de Gemini que prefieras. Con una clave válida la lista se carga automáticamente desde la API.
 
-3.  **Guarda la Configuración**:
-    - Haz clic en el botón "Guardar Configuración" al final de la página.
+#### b) DeepSeek
+
+1.  **Obtén tu API Key**:
+    - Ve a [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) y crea una clave.
+2.  **Guárdala en Nisaba**:
+    - Pega la clave en el campo "API Key de DeepSeek".
+    - Selecciona el modelo: `deepseek-chat` es rápido y económico; `deepseek-reasoner` razona más pero tarda bastante más por carpeta.
+
+#### c) Prompt y guardado
+
+- Opcionalmente, puedes personalizar el *prompt* que se usa para generar los análisis editando el archivo `prompt.txt`. Es el mismo para ambos proveedores.
+- Haz clic en el botón "Guardar Configuración" al final de la página.
 
 ¡Y ya está! Nisaba está listo para que empieces a añadir tus fuentes y a explorar las noticias con una nueva perspectiva.
 

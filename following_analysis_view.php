@@ -15,6 +15,14 @@ if (isset($xml_data->external_notes_sources)) {
 if (empty($followed_sources)) {
     echo '<p>No sigues a ningún usuario todavía. Puedes añadir usuarios desde la sección "Gestionar Fuentes".</p>';
 } else {
+    // Load the current user's article cache once (it can be tens of MB) and index its GUIDs.
+    $user_cache_guids = [];
+    $user_cache_xml = nisaba_load_cache($cacheFile);
+    if ($user_cache_xml) {
+        foreach ($user_cache_xml->item as $cached_item) {
+            $user_cache_guids[cached_article_guid($cached_item)] = true;
+        }
+    }
     foreach ($followed_sources as $source) {
         $source_url = rtrim((string)$source->url, '/');
         $source_name = (string)$source->name;
@@ -84,16 +92,6 @@ if (empty($followed_sources)) {
                     echo '<div class="summary-container" style="margin-top: 1em;">';
                     
                     if (trim($content_encoded) !== '') {
-
-                        // Load the current user's article cache
-                        $currentUserCacheFile = DATA_DIR . '/' . $_SESSION['username'] . '_cache.xml';
-                        $user_cache_xml = null;
-                        if (file_exists($currentUserCacheFile)) {
-                            libxml_use_internal_errors(true);
-                            $user_cache_xml = simplexml_load_file($currentUserCacheFile);
-                            libxml_clear_errors();
-                        }
-
                         $dom = new DOMDocument();
                         // Use @ to suppress warnings from invalid HTML in the content
                         @$dom->loadHTML('<?xml encoding="UTF-8">' . $content_encoded, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
@@ -104,15 +102,7 @@ if (empty($followed_sources)) {
                             if (strpos($href, '?article_guid=') === 0) {
                                 $guid_url = urldecode(substr($href, strlen('?article_guid=')));
                                 
-                                $article_in_cache = false;
-                                if ($user_cache_xml) {
-                                    // Search for the guid in the user's cache
-                                    $query = '//item[guid="' . htmlspecialchars($guid_url) . '"]';
-                                    $result = $user_cache_xml->xpath($query);
-                                    if (!empty($result)) {
-                                        $article_in_cache = true;
-                                    }
-                                }
+                                $article_in_cache = isset($user_cache_guids[$guid_url]);
 
                                 if (!$article_in_cache) {
                                     $link->setAttribute('href', $guid_url);
